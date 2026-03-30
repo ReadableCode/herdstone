@@ -1,14 +1,15 @@
 from pathlib import Path
 
-# Default paths
-DEFAULT_INVENTORY_FILENAME = "herdstone_inventory.yaml"
+# Inventory search path — first match wins
+INVENTORY_SEARCH_PATH = [
+    Path(__file__).resolve().parent.parent.parent / "dotfiles" / "inventory" / "hosts",
+    Path.home() / "hosts",
+    Path.home() / "herdstone_hosts",
+]
 
 
-def get_config_dir() -> Path:
-    config_dir = Path.home() / ".config" / "herdstone"
-    config_dir.mkdir(parents=True, exist_ok=True)
-    return config_dir
-
-
-def get_inventory_path() -> Path:
-    return get_config_dir() / DEFAULT_INVENTORY_FILENAME
+def get_inventory_path() -> Path | None:
+    for path in INVENTORY_SEARCH_PATH:
+        if path.is_file():
+            return path
+    return None
