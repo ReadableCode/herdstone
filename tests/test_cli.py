@@ -11,10 +11,12 @@ runner = CliRunner()
 
 def _write_test_inventory(tmp_path: Path) -> Path:
     inv = tmp_path / "hosts"
-    inv.write_text(dedent("""\
+    inv.write_text(
+        dedent("""\
         [test_group]
         localhost ansible_host=127.0.0.1 ansible_user=tester ssh_alias=sshlocal
-    """))
+    """)
+    )
     return inv
 
 
@@ -67,4 +69,3 @@ def test_ping_unknown_group(tmp_path, monkeypatch):
     monkeypatch.setattr("engine.config.INVENTORY_SEARCH_PATH", [inv])
     result = runner.invoke(app, ["ping", "--group", "nonexistent"])
     assert result.exit_code == 1
-
