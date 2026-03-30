@@ -80,7 +80,9 @@ def hosts(output_json: bool = typer.Option(False, "--json", help="Output as JSON
 @app.command()
 def ping(
     target: Optional[str] = typer.Argument(None, help="Host alias or name to ping"),
-    group: Optional[str] = typer.Option(None, "--group", "-g", help="Ping all machines in a group"),
+    group: Optional[str] = typer.Option(
+        None, "--group", "-g", help="Ping all machines in a group"
+    ),
     all_hosts: bool = typer.Option(False, "--all", "-a", help="Ping all machines"),
     output_json: bool = typer.Option(False, "--json", help="Output as JSON"),
 ):
@@ -105,7 +107,9 @@ def ping(
             host = next((m.hostname for m in targets if m.id == r.machine_id), "")
             icon = "✓" if r.exit_code == 0 else "✗"
             status = "online" if r.exit_code == 0 else "offline"
-            typer.echo(f"  {icon} {r.machine_id:<20} {host:<25} {status}  ({r.duration_ms}ms)")
+            typer.echo(
+                f"  {icon} {r.machine_id:<20} {host:<25} {status}  ({r.duration_ms}ms)"
+            )
 
 
 if __name__ == "__main__":

@@ -38,7 +38,9 @@ async def ping_one(machine: Machine, count: int = 1, timeout: int = 2) -> Comman
     )
 
 
-async def ping_many(machines: list[Machine], count: int = 1, timeout: int = 2) -> list[CommandResult]:
+async def ping_many(
+    machines: list[Machine], count: int = 1, timeout: int = 2
+) -> list[CommandResult]:
     """Ping multiple machines concurrently."""
     tasks = [ping_one(m, count=count, timeout=timeout) for m in machines]
     return await asyncio.gather(*tasks)
