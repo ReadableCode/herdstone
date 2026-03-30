@@ -1,8 +1,8 @@
 import re
 from pathlib import Path
 
-from engine.config import get_inventory_path
-from engine.models import Machine
+from .config import get_inventory_path
+from .models import Machine
 
 
 def parse_inventory(path: Path | None = None) -> list[Machine]:

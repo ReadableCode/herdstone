@@ -2,7 +2,7 @@ import json
 
 import typer
 
-from engine.inventory import parse_inventory
+from .inventory import parse_inventory
 
 app = typer.Typer(name="herdstone", help="Herdstone — machine herd monitor")
 
