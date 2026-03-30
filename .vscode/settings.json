@@ -1,5 +1,11 @@
 {
   "python.analysis.typeCheckingMode": "off",
+  "python.linting.enabled": false,
+  "python.linting.flake8Enabled": false,
+  "python.linting.pylintEnabled": false,
+  "python.linting.pycodestyleEnabled": false,
+  "flake8.enabled": false,
+  "pylint.enabled": false,
   "[python]": {
     "editor.defaultFormatter": "charliermarsh.ruff",
     "editor.formatOnSave": true,
