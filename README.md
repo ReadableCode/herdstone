@@ -12,30 +12,29 @@
 
 ```
 herdstone/
-├── engine/                  # Self-contained Python project (uv)
-│   ├── pyproject.toml       # Python project config — uv boundary is here
-│   ├── uv.lock
-│   ├── herdstone/
-│   │   ├── __init__.py
-│   │   ├── models.py        # Dataclasses: Machine, Group, CommandResult, etc.
-│   │   ├── config.py        # App config, paths, defaults
-│   │   ├── inventory.py     # Load/save/parse machine inventory (Ansible-compatible)
-│   │   ├── ssh.py           # SSH harness: connect, run command, push keys
-│   │   ├── ping.py          # ICMP ping, reachability checks
-│   │   ├── discovery.py     # mDNS/Bonjour + Tailscale API discovery
-│   │   ├── wol.py           # Wake-on-LAN magic packet sender
-│   │   ├── health.py        # HTTP health endpoint polling
-│   │   ├── ios_bridge.py    # iOS device state via iCloud/Shortcuts bridge
-│   │   ├── command_runner.py # Run commands across herd (single, group, all)
-│   │   └── cli.py           # Typer CLI entry point
-│   └── tests/
-│       ├── test_inventory.py
-│       ├── test_ssh.py
-│       ├── test_ping.py
-│       └── test_discovery.py
+├── pyproject.toml           # Python project config (uv)
+├── engine/                  # The Python package (import engine.models)
+│   ├── __init__.py
+│   ├── models.py            # Dataclasses: Machine, Group, CommandResult, etc.
+│   ├── config.py            # App config, paths, defaults
+│   ├── inventory.py         # Load/save/parse machine inventory (Ansible-compatible)
+│   ├── ssh.py               # SSH harness: connect, run command, push keys
+│   ├── ping.py              # ICMP ping, reachability checks
+│   ├── discovery.py         # mDNS/Bonjour + Tailscale API discovery
+│   ├── wol.py               # Wake-on-LAN magic packet sender
+│   ├── health.py            # HTTP health endpoint polling
+│   ├── ios_bridge.py        # iOS device state via iCloud/Shortcuts bridge
+│   ├── command_runner.py    # Run commands across herd (single, group, all)
+│   └── cli.py               # Typer CLI entry point
+│
+├── tests/
+│   ├── test_inventory.py
+│   ├── test_ssh.py
+│   ├── test_ping.py
+│   └── test_discovery.py
 │
 ├── cli/
-│   └── herdstone             # Shell script — calls `uv run` into engine
+│   └── herdstone             # Shell script — calls `uv run` into project root
 │
 ├── ui_mac/                  # SwiftUI macOS menubar app — Mac only
 │   ├── HerdstoneApp.swift
@@ -234,13 +233,13 @@ git clone git@github.com:ReadableCode/herdstone.git
 cd herdstone
 
 # Install Python dependencies
-cd engine && uv sync && cd ..
+uv sync
 
 # Run the CLI (start here, no UI needed)
 ./cli/herdstone --help
 
 # Run tests
-cd engine && uv run pytest
+uv run pytest
 ```
 
 ---
@@ -249,15 +248,15 @@ cd engine && uv run pytest
 
 If picking this up fresh, build in this order:
 
-1. `engine/herdstone/models.py` — dataclasses only, no logic
-2. `engine/herdstone/config.py` — paths, defaults, config file loading
-3. `engine/herdstone/inventory.py` — load/save YAML inventory, Ansible import
-4. `engine/herdstone/ping.py` — ICMP ping, async, returns `CommandResult`
-5. `engine/herdstone/ssh.py` — connect, run command, push key, async
-6. `engine/herdstone/command_runner.py` — fan out commands to one/group/all machines concurrently
-7. `engine/herdstone/cli.py` — Typer CLI entry point, `--json` flag on all commands
-8. `cli/herdstone` — shell script wrapper calling `uv run` into engine
-9. `engine/tests/` — unit tests for each engine module
+1. `engine/models.py` — dataclasses only, no logic
+2. `engine/config.py` — paths, defaults, config file loading
+3. `engine/inventory.py` — load/save YAML inventory, Ansible import
+4. `engine/ping.py` — ICMP ping, async, returns `CommandResult`
+5. `engine/ssh.py` — connect, run command, push key, async
+6. `engine/command_runner.py` — fan out commands to one/group/all machines concurrently
+7. `engine/cli.py` — Typer CLI entry point, `--json` flag on all commands
+8. `cli/herdstone` — shell script wrapper calling `uv run`
+9. `tests/` — unit tests for each engine module
 10. `ui_mac/` — SwiftUI menubar app, calls CLI script and parses JSON stdout
 
 Do not start the SwiftUI layer until the engine passes all tests and the CLI is fully functional. The UI should never contain business logic.

@@ -3,6 +3,6 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ENGINE_DIR="$SCRIPT_DIR/../engine"
+PROJECT_DIR="$SCRIPT_DIR/.."
 
-exec uv run --project "$ENGINE_DIR" herdstone "$@"
+exec uv run --project "$PROJECT_DIR" herdstone "$@"
