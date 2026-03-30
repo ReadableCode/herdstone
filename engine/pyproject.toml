@@ -1,0 +1,19 @@
+[project]
+name = "herdstone"
+version = "0.1.0"
+description = "Cross-platform machine herd monitor engine"
+requires-python = ">=3.14"
+dependencies = [
+    "typer>=0.12",
+    "pyyaml>=6.0",
+]
+
+[project.scripts]
+herdstone = "herdstone.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

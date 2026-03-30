@@ -12,22 +12,31 @@
 
 ```
 herdstone/
-├── engine/                  # Pure Python — cross-platform, zero UI deps
-│   ├── __init__.py
-│   ├── inventory.py         # Load/save/parse machine inventory (Ansible-compatible)
-│   ├── ssh.py               # SSH harness: connect, run command, push keys
-│   ├── ping.py              # ICMP ping, reachability checks
-│   ├── discovery.py         # mDNS/Bonjour + Tailscale API discovery
-│   ├── wol.py               # Wake-on-LAN magic packet sender
-│   ├── health.py            # HTTP health endpoint polling
-│   ├── ios_bridge.py        # iOS device state via iCloud/Shortcuts bridge
-│   ├── command_runner.py    # Run commands across herd (single, group, all)
-│   ├── models.py            # Dataclasses: Machine, Group, CommandResult, etc.
-│   └── config.py            # App config, paths, defaults
+├── engine/                  # Self-contained Python project (uv)
+│   ├── pyproject.toml       # Python project config — uv boundary is here
+│   ├── uv.lock
+│   ├── src/
+│   │   └── herdstone/
+│   │       ├── __init__.py
+│   │       ├── models.py        # Dataclasses: Machine, Group, CommandResult, etc.
+│   │       ├── config.py        # App config, paths, defaults
+│   │       ├── inventory.py     # Load/save/parse machine inventory (Ansible-compatible)
+│   │       ├── ssh.py           # SSH harness: connect, run command, push keys
+│   │       ├── ping.py          # ICMP ping, reachability checks
+│   │       ├── discovery.py     # mDNS/Bonjour + Tailscale API discovery
+│   │       ├── wol.py           # Wake-on-LAN magic packet sender
+│   │       ├── health.py        # HTTP health endpoint polling
+│   │       ├── ios_bridge.py    # iOS device state via iCloud/Shortcuts bridge
+│   │       ├── command_runner.py # Run commands across herd (single, group, all)
+│   │       └── cli.py           # Typer CLI entry point
+│   └── tests/
+│       ├── test_inventory.py
+│       ├── test_ssh.py
+│       ├── test_ping.py
+│       └── test_discovery.py
 │
-├── cli/                     # Shared CLI — useful for testing and power users
-│   ├── __init__.py
-│   └── main.py              # Typer CLI wrapping engine, also used as IPC bridge for UI
+├── cli/
+│   └── herdstone             # Shell script — calls `uv run` into engine
 │
 ├── ui_mac/                  # SwiftUI macOS menubar app — Mac only
 │   ├── HerdstoneApp.swift
@@ -35,19 +44,7 @@ herdstone/
 │   ├── MachineRowView.swift
 │   ├── HerdDetailView.swift
 │   ├── CommandPaletteView.swift
-│   └── EngineClient.swift   # Calls CLI subprocess, parses JSON stdout
-│
-├── ui_linux/                # PyQt or TUI — Linux tray app (future)
-│   └── placeholder.md
-│
-├── ui_windows/              # PyQt or WinUI — Windows tray app (future)
-│   └── placeholder.md
-│
-├── tests/
-│   ├── test_inventory.py
-│   ├── test_ssh.py
-│   ├── test_ping.py
-│   └── test_discovery.py
+│   └── EngineClient.swift   # Calls CLI script, parses JSON stdout
 │
 ├── docs/
 │   ├── architecture.md      # Deeper architecture notes
@@ -55,8 +52,6 @@ herdstone/
 │   ├── ios_bridge.md        # How the iOS Shortcut bridge works
 │   └── roadmap.md           # Versioned roadmap
 │
-├── pyproject.toml           # Python project config (uv)
-├── uv.lock
 ├── .gitignore
 └── README.md
 ```
@@ -71,17 +66,17 @@ The UI layer (SwiftUI on Mac, PyQt on Linux/Windows) communicates with the engin
 
 | Command | Description |
 |---|---|
-| `herd status --json` | List all machines with current status |
-| `machine {id} --json` | Get single machine detail |
-| `ping {id} --json` | Ping a machine |
-| `run {id} {command} --json` | Run a command on a machine |
-| `run --all {command} --json` | Run a command on all machines |
-| `run --group {name} {command} --json` | Run a command on a named group |
-| `push-key {id} --json` | Push a public key to a machine |
-| `discover --json` | Trigger mDNS/Tailscale discovery scan |
-| `ios --json` | Get iOS device states (battery, last seen) |
+| `herdstone status --json` | List all machines with current status |
+| `herdstone machine {id} --json` | Get single machine detail |
+| `herdstone ping {id} --json` | Ping a machine |
+| `herdstone run {id} {command} --json` | Run a command on a machine |
+| `herdstone run --all {command} --json` | Run a command on all machines |
+| `herdstone run --group {name} {command} --json` | Run a command on a named group |
+| `herdstone push-key {id} --json` | Push a public key to a machine |
+| `herdstone discover --json` | Trigger mDNS/Tailscale discovery scan |
+| `herdstone ios --json` | Get iOS device states (battery, last seen) |
 
-The SwiftUI app calls these via `Process()`, reads stdout, and parses the JSON. Python-side UIs (PyQt, TUI) import the engine directly — no subprocess needed.
+The `cli/herdstone` script is a thin shell wrapper that runs `uv run` inside `engine/`. The SwiftUI app calls it via `Process()`, reads stdout, and parses JSON.
 
 ---
 
@@ -240,13 +235,13 @@ git clone git@github.com:ReadableCode/herdstone.git
 cd herdstone
 
 # Install Python dependencies
-uv sync
+cd engine && uv sync && cd ..
 
-# Run the engine CLI (start here, no UI needed)
-uv run python -m cli.main --help
+# Run the CLI (start here, no UI needed)
+./cli/herdstone --help
 
 # Run tests
-uv run pytest
+cd engine && uv run pytest
 ```
 
 ---
@@ -255,15 +250,16 @@ uv run pytest
 
 If picking this up fresh, build in this order:
 
-1. `engine/models.py` — dataclasses only, no logic
-2. `engine/config.py` — paths, defaults, config file loading
-3. `engine/inventory.py` — load/save YAML inventory, Ansible import
-4. `engine/ping.py` — ICMP ping, async, returns `CommandResult`
-5. `engine/ssh.py` — connect, run command, push key, async
-6. `engine/command_runner.py` — fan out commands to one/group/all machines concurrently
-7. `cli/main.py` — Typer CLI wrapping engine, `--json` flag on all commands
-8. `tests/` — unit tests for each engine module
-9. `ui_mac/` — SwiftUI menubar app, calls CLI subprocess and parses JSON stdout
+1. `engine/src/herdstone/models.py` — dataclasses only, no logic
+2. `engine/src/herdstone/config.py` — paths, defaults, config file loading
+3. `engine/src/herdstone/inventory.py` — load/save YAML inventory, Ansible import
+4. `engine/src/herdstone/ping.py` — ICMP ping, async, returns `CommandResult`
+5. `engine/src/herdstone/ssh.py` — connect, run command, push key, async
+6. `engine/src/herdstone/command_runner.py` — fan out commands to one/group/all machines concurrently
+7. `engine/src/herdstone/cli.py` — Typer CLI entry point, `--json` flag on all commands
+8. `cli/herdstone` — shell script wrapper calling `uv run` into engine
+9. `engine/tests/` — unit tests for each engine module
+10. `ui_mac/` — SwiftUI menubar app, calls CLI script and parses JSON stdout
 
 Do not start the SwiftUI layer until the engine passes all tests and the CLI is fully functional. The UI should never contain business logic.
 
