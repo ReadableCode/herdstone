@@ -15,20 +15,19 @@ herdstone/
 ├── engine/                  # Self-contained Python project (uv)
 │   ├── pyproject.toml       # Python project config — uv boundary is here
 │   ├── uv.lock
-│   ├── src/
-│   │   └── herdstone/
-│   │       ├── __init__.py
-│   │       ├── models.py        # Dataclasses: Machine, Group, CommandResult, etc.
-│   │       ├── config.py        # App config, paths, defaults
-│   │       ├── inventory.py     # Load/save/parse machine inventory (Ansible-compatible)
-│   │       ├── ssh.py           # SSH harness: connect, run command, push keys
-│   │       ├── ping.py          # ICMP ping, reachability checks
-│   │       ├── discovery.py     # mDNS/Bonjour + Tailscale API discovery
-│   │       ├── wol.py           # Wake-on-LAN magic packet sender
-│   │       ├── health.py        # HTTP health endpoint polling
-│   │       ├── ios_bridge.py    # iOS device state via iCloud/Shortcuts bridge
-│   │       ├── command_runner.py # Run commands across herd (single, group, all)
-│   │       └── cli.py           # Typer CLI entry point
+│   ├── herdstone/
+│   │   ├── __init__.py
+│   │   ├── models.py        # Dataclasses: Machine, Group, CommandResult, etc.
+│   │   ├── config.py        # App config, paths, defaults
+│   │   ├── inventory.py     # Load/save/parse machine inventory (Ansible-compatible)
+│   │   ├── ssh.py           # SSH harness: connect, run command, push keys
+│   │   ├── ping.py          # ICMP ping, reachability checks
+│   │   ├── discovery.py     # mDNS/Bonjour + Tailscale API discovery
+│   │   ├── wol.py           # Wake-on-LAN magic packet sender
+│   │   ├── health.py        # HTTP health endpoint polling
+│   │   ├── ios_bridge.py    # iOS device state via iCloud/Shortcuts bridge
+│   │   ├── command_runner.py # Run commands across herd (single, group, all)
+│   │   └── cli.py           # Typer CLI entry point
 │   └── tests/
 │       ├── test_inventory.py
 │       ├── test_ssh.py
@@ -216,7 +215,7 @@ groups:
 
 | Layer | Technology | Reason |
 |---|---|---|
-| Engine | Python 3.12+ | Cross-platform, mature SSH/networking libs, existing author expertise |
+| Engine | Python 3.14+ | Cross-platform, mature SSH/networking libs, existing author expertise |
 | SSH | `asyncssh` | Async, well-maintained, no native dependency headaches |
 | Ping | `icmplib` | Cross-platform ICMP, clean API |
 | mDNS | `zeroconf` | Cross-platform Bonjour/Avahi |
@@ -250,13 +249,13 @@ cd engine && uv run pytest
 
 If picking this up fresh, build in this order:
 
-1. `engine/src/herdstone/models.py` — dataclasses only, no logic
-2. `engine/src/herdstone/config.py` — paths, defaults, config file loading
-3. `engine/src/herdstone/inventory.py` — load/save YAML inventory, Ansible import
-4. `engine/src/herdstone/ping.py` — ICMP ping, async, returns `CommandResult`
-5. `engine/src/herdstone/ssh.py` — connect, run command, push key, async
-6. `engine/src/herdstone/command_runner.py` — fan out commands to one/group/all machines concurrently
-7. `engine/src/herdstone/cli.py` — Typer CLI entry point, `--json` flag on all commands
+1. `engine/herdstone/models.py` — dataclasses only, no logic
+2. `engine/herdstone/config.py` — paths, defaults, config file loading
+3. `engine/herdstone/inventory.py` — load/save YAML inventory, Ansible import
+4. `engine/herdstone/ping.py` — ICMP ping, async, returns `CommandResult`
+5. `engine/herdstone/ssh.py` — connect, run command, push key, async
+6. `engine/herdstone/command_runner.py` — fan out commands to one/group/all machines concurrently
+7. `engine/herdstone/cli.py` — Typer CLI entry point, `--json` flag on all commands
 8. `cli/herdstone` — shell script wrapper calling `uv run` into engine
 9. `engine/tests/` — unit tests for each engine module
 10. `ui_mac/` — SwiftUI menubar app, calls CLI script and parses JSON stdout
