@@ -62,17 +62,43 @@ The UI layer (SwiftUI on Mac, PyQt on Linux/Windows) communicates with the engin
 
 ### CLI commands
 
-| Command | Description |
-|---|---|
-| `herdstone status --json` | List all machines with current status |
-| `herdstone machine {id} --json` | Get single machine detail |
-| `herdstone ping {id} --json` | Ping a machine |
-| `herdstone run {id} {command} --json` | Run a command on a machine |
-| `herdstone run --all {command} --json` | Run a command on all machines |
-| `herdstone run --group {name} {command} --json` | Run a command on a named group |
-| `herdstone push-key {id} --json` | Push a public key to a machine |
-| `herdstone discover --json` | Trigger mDNS/Tailscale discovery scan |
-| `herdstone ios --json` | Get iOS device states (battery, last seen) |
+| Command | Description | Status |
+|---|---|---|
+| `herdstone hosts` | List all machines from inventory | ✅ |
+| `herdstone hosts --json` | List all machines as JSON | ✅ |
+| `herdstone ping {id}` | Ping a single machine | ✅ |
+| `herdstone ping --group {name}` | Ping all machines in a group | ✅ |
+| `herdstone ping --all` | Ping all machines concurrently | ✅ |
+| `herdstone ping --all --json` | Ping all machines, JSON output | ✅ |
+| `herdstone status --json` | List all machines with current status | planned |
+| `herdstone machine {id} --json` | Get single machine detail | planned |
+| `herdstone run {id} {command} --json` | Run a command on a machine | planned |
+| `herdstone run --all {command} --json` | Run a command on all machines | planned |
+| `herdstone run --group {name} {command} --json` | Run a command on a named group | planned |
+| `herdstone push-key {id} --json` | Push a public key to a machine | planned |
+| `herdstone discover --json` | Trigger mDNS/Tailscale discovery scan | planned |
+| `herdstone ios --json` | Get iOS device states (battery, last seen) | planned |
+
+All implemented commands support `--json` for machine-readable output.
+
+#### Examples
+
+```bash
+# List all hosts from inventory
+herdstone hosts
+
+# Ping all machines concurrently (~1-2s regardless of host count)
+herdstone ping --all
+
+# Ping just the macs group
+herdstone ping --group macs
+
+# Ping a single host by alias
+herdstone ping sshbehemoth
+
+# JSON output (for scripting or UI consumption)
+herdstone ping --group raspbian --json
+```
 
 The `cli/herdstone` script is a thin shell wrapper that runs `uv run` inside `engine/`. The SwiftUI app calls it via `Process()`, reads stdout, and parses JSON.
 
