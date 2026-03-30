@@ -5,7 +5,7 @@ from typing import Optional
 import typer
 
 from .inventory import parse_inventory
-from .ping import ping_many, ping_one
+from .ping import ping_many, ping_one  # noqa: F401
 
 app = typer.Typer(name="herdstone", help="Herdstone — machine herd monitor")
 
