@@ -6,7 +6,16 @@ from .ssh import run_ssh_command
 
 # Map inventory groups to OS families
 WINDOWS_GROUPS = {"windows_workstations", "hellofresh_windows", "rebeca_windows", "crown_windows"}
-UNIX_GROUPS = {"linux_workstations", "macs", "work_linux", "fourteen_foods", "unraid", "raspbian", "android", "ginamary"}
+UNIX_GROUPS = {
+    "linux_workstations",
+    "macs",
+    "work_linux",
+    "fourteen_foods",
+    "unraid",
+    "raspbian",
+    "android",
+    "ginamary",
+}
 
 
 @dataclass
@@ -57,18 +66,20 @@ def _parse_df_output(machine_id: str, stdout: str) -> list[DriveInfo]:
             avail_kb = int(parts[3])
             pct_str = parts[4].rstrip("%")
             use_pct = float(pct_str)
-        except (ValueError, IndexError):
+        except ValueError, IndexError:
             continue
 
-        drives.append(DriveInfo(
-            machine_id=machine_id,
-            filesystem=filesystem,
-            mount_point=mount_point,
-            size_bytes=size_kb * 1024,
-            used_bytes=used_kb * 1024,
-            avail_bytes=avail_kb * 1024,
-            use_percent=use_pct,
-        ))
+        drives.append(
+            DriveInfo(
+                machine_id=machine_id,
+                filesystem=filesystem,
+                mount_point=mount_point,
+                size_bytes=size_kb * 1024,
+                used_bytes=used_kb * 1024,
+                avail_bytes=avail_kb * 1024,
+                use_percent=use_pct,
+            )
+        )
 
     return drives
 
@@ -80,7 +91,7 @@ def _parse_powershell_output(machine_id: str, stdout: str) -> list[DriveInfo]:
     drives = []
     try:
         data = json.loads(stdout)
-    except (json.JSONDecodeError, ValueError):
+    except json.JSONDecodeError, ValueError:
         return drives
 
     if isinstance(data, dict):
@@ -94,15 +105,17 @@ def _parse_powershell_output(machine_id: str, stdout: str) -> list[DriveInfo]:
         if size == 0:
             continue
 
-        drives.append(DriveInfo(
-            machine_id=machine_id,
-            filesystem=f"{name}:",
-            mount_point=f"{name}:\\",
-            size_bytes=int(size),
-            used_bytes=int(used),
-            avail_bytes=int(free),
-            use_percent=round((used / size) * 100, 1) if size else 0.0,
-        ))
+        drives.append(
+            DriveInfo(
+                machine_id=machine_id,
+                filesystem=f"{name}:",
+                mount_point=f"{name}:\\",
+                size_bytes=int(size),
+                used_bytes=int(used),
+                avail_bytes=int(free),
+                use_percent=round((used / size) * 100, 1) if size else 0.0,
+            )
+        )
 
     return drives
 
