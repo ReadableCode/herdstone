@@ -6,6 +6,7 @@ import typer
 
 from .inventory import parse_inventory
 from .ping import ping_many, ping_one  # noqa: F401
+from .storage import get_storage_many
 
 app = typer.Typer(name="herdstone", help="Herdstone — machine herd monitor")
 
@@ -104,6 +105,57 @@ def ping(
             icon = "✓" if r.exit_code == 0 else "✗"
             status = "online" if r.exit_code == 0 else "offline"
             typer.echo(f"  {icon} {r.machine_id:<20} {host:<25} {status}  ({r.duration_ms}ms)")
+
+
+def _fmt_bytes(n: int) -> str:
+    """Format bytes as human-readable string."""
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if abs(n) < 1024:
+            return f"{n:.1f}{unit}"
+        n /= 1024
+    return f"{n:.1f}PB"
+
+
+@app.command()
+def storage(
+    target: Optional[str] = typer.Argument(None, help="Host alias or name"),
+    group: Optional[str] = typer.Option(None, "--group", "-g", help="Query all machines in a group"),
+    all_hosts: bool = typer.Option(False, "--all", "-a", help="Query all machines"),
+    output_json: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Show storage/disk usage for one machine, a group, or all machines."""
+    targets = _resolve_targets(target=target, group=group, all_hosts=all_hosts)
+    results = asyncio.run(get_storage_many(targets))
+
+    if output_json:
+        data = {}
+        for machine_id, drives in results.items():
+            data[machine_id] = [
+                {
+                    "filesystem": d.filesystem,
+                    "mount_point": d.mount_point,
+                    "size_bytes": d.size_bytes,
+                    "used_bytes": d.used_bytes,
+                    "avail_bytes": d.avail_bytes,
+                    "use_percent": d.use_percent,
+                }
+                for d in drives
+            ]
+        typer.echo(json.dumps(data, indent=2))
+    else:
+        for machine_id, drives in results.items():
+            if not drives:
+                typer.echo(f"  ✗ {machine_id:<20} no data (unreachable or SSH failed)")
+                continue
+            for i, d in enumerate(drives):
+                prefix = f"  {machine_id:<20}" if i == 0 else f"  {'':<20}"
+                bar_len = 20
+                filled = int(bar_len * d.use_percent / 100)
+                bar = "█" * filled + "░" * (bar_len - filled)
+                typer.echo(
+                    f"{prefix} {d.mount_point:<20} [{bar}] {d.use_percent:5.1f}%  "
+                    f"{_fmt_bytes(d.used_bytes)} / {_fmt_bytes(d.size_bytes)}"
+                )
 
 
 if __name__ == "__main__":

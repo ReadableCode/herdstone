@@ -70,6 +70,10 @@ The UI layer (SwiftUI on Mac, PyQt on Linux/Windows) communicates with the engin
 | `herdstone ping --group {name}` | Ping all machines in a group | ✅ |
 | `herdstone ping --all` | Ping all machines concurrently | ✅ |
 | `herdstone ping --all --json` | Ping all machines, JSON output | ✅ |
+| `herdstone storage {id}` | Show disk usage for a single machine | ✅ |
+| `herdstone storage --group {name}` | Show disk usage for a group | ✅ |
+| `herdstone storage --all` | Show disk usage for all machines | ✅ |
+| `herdstone storage --all --json` | Disk usage, JSON output | ✅ |
 | `herdstone status --json` | List all machines with current status | planned |
 | `herdstone machine {id} --json` | Get single machine detail | planned |
 | `herdstone run {id} {command} --json` | Run a command on a machine | planned |
@@ -98,6 +102,15 @@ herdstone ping sshbehemoth
 
 # JSON output (for scripting or UI consumption)
 herdstone ping --group raspbian --json
+
+# Show disk usage for all raspberry pis
+herdstone storage --group raspbian
+
+# Show disk usage for a single host
+herdstone storage sshelite
+
+# Show all disk usage as JSON
+herdstone storage --all --json
 ```
 
 The `cli/herdstone` script is a thin shell wrapper that runs `uv run` inside `engine/`. The SwiftUI app calls it via `Process()`, reads stdout, and parses JSON.
