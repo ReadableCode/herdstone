@@ -20,6 +20,7 @@ herdstone/
 │   ├── inventory.py         # Load/save/parse machine inventory (Ansible-compatible)
 │   ├── ssh.py               # SSH harness: connect, run command, push keys
 │   ├── ping.py              # ICMP ping, reachability checks
+│   ├── storage.py           # Disk usage queries (OS-aware: df/PowerShell)
 │   ├── discovery.py         # mDNS/Bonjour + Tailscale API discovery
 │   ├── wol.py               # Wake-on-LAN magic packet sender
 │   ├── health.py            # HTTP health endpoint polling
