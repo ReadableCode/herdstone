@@ -41,7 +41,7 @@ def _get_os_family(machine: Machine) -> str:
 
 def _parse_df_output(machine_id: str, stdout: str) -> list[DriveInfo]:
     """Parse POSIX df -Pk output into DriveInfo list."""
-    drives = []
+    drives: list[DriveInfo] = []
     lines = stdout.strip().splitlines()
     if len(lines) < 2:
         return drives
@@ -88,7 +88,7 @@ def _parse_powershell_output(machine_id: str, stdout: str) -> list[DriveInfo]:
     """Parse PowerShell Get-PSDrive JSON output into DriveInfo list."""
     import json
 
-    drives = []
+    drives: list[DriveInfo] = []
     try:
         data = json.loads(stdout)
     except json.JSONDecodeError, ValueError:

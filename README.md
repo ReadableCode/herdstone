@@ -59,7 +59,7 @@ herdstone/
 
 ## CLI as IPC Bridge
 
-The UI layer (SwiftUI on Mac, PyQt on Linux/Windows) communicates with the engine by calling the CLI as a subprocess. All commands support a `--json` flag for machine-readable output. No server process, no ports, no daemon lifecycle.
+The UI layer (SwiftUI on Mac, PyQt on Linux/Windows) communicates with the engine by calling the CLI as a subprocess. All commands support a `--json` flag for machine-readable output.
 
 ### CLI commands
 
