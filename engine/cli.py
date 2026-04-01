@@ -100,11 +100,13 @@ def ping(
         ]
         typer.echo(json.dumps(data, indent=2))
     else:
+        name_map = {m.id: m.name for m in targets}
         for r in results:
             host = next((m.hostname for m in targets if m.id == r.machine_id), "")
+            name = name_map.get(r.machine_id, r.machine_id)
             icon = "✓" if r.exit_code == 0 else "✗"
             status = "online" if r.exit_code == 0 else "offline"
-            typer.echo(f"  {icon} {r.machine_id:<20} {host:<25} {status}  ({r.duration_ms}ms)")
+            typer.echo(f"  {icon} {name:<20} {host:<25} {status}  ({r.duration_ms}ms)")
 
 
 def _fmt_bytes(n: int) -> str:
@@ -143,12 +145,14 @@ def storage(
             ]
         typer.echo(json.dumps(data, indent=2))
     else:
+        name_map = {m.id: m.name for m in targets}
         for machine_id, drives in results.items():
+            name = name_map.get(machine_id, machine_id)
             if not drives:
-                typer.echo(f"  ✗ {machine_id:<20} no data (unreachable or SSH failed)")
+                typer.echo(f"  ✗ {name:<20} no data (unreachable or SSH failed)")
                 continue
             for i, d in enumerate(drives):
-                prefix = f"  {machine_id:<20}" if i == 0 else f"  {'':<20}"
+                prefix = f"  {name:<20}" if i == 0 else f"  {'':<20}"
                 bar_len = 20
                 filled = int(bar_len * d.use_percent / 100)
                 bar = "█" * filled + "░" * (bar_len - filled)
