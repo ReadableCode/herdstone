@@ -42,7 +42,9 @@ async def _run_local_command(machine: Machine, command: str, timeout: int = 10) 
 
     try:
         proc = await asyncio.create_subprocess_exec(
-            shell, flag, command,
+            shell,
+            flag,
+            command,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
