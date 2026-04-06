@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 from typing import Optional
 
 import typer
@@ -160,6 +161,144 @@ def storage(
                     f"{prefix} {d.mount_point:<20} [{bar}] {d.use_percent:5.1f}%  "
                     f"{_fmt_bytes(d.used_bytes)} / {_fmt_bytes(d.size_bytes)}"
                 )
+
+
+def get_local_public_key(key_path: str = ""):
+    """Read the local public SSH key from the specified path."""
+    if not key_path:
+        key_path = os.path.expanduser("~/.ssh/id_rsa.pub")
+
+    if not os.path.exists(key_path):
+        typer.echo(f"Public SSH key not found at: {key_path}")
+        raise typer.Exit(1)
+
+    with open(key_path, "r") as f:
+        return f.read().strip()
+
+
+@app.command()
+def push_key(
+    target: str = typer.Argument(..., help="Host alias or name to push SSH key to"),
+    key_path: str = typer.Option("~/.ssh/id_rsa.pub", "--key", "-k", help="Path to public SSH key"),
+    auth_keys_path: str = typer.Option(
+        "", "--auth-keys", "-a", help="Remote authorized_keys path (default: OS-appropriate)"
+    ),
+):
+    """Push your public SSH key to a target machine's authorized_keys."""
+    targets = _resolve_targets(target=target)
+    if len(targets) > 1:
+        typer.echo("Multiple machines matched. Please specify a unique target.")
+        raise typer.Exit(1)
+    machine = targets[0]
+
+    target_is_windows = any("windows" in g.lower() for g in machine.groups)
+
+    if not auth_keys_path:
+        if target_is_windows:
+            auth_keys_path = f"C:\\Users\\{machine.user}\\.ssh\\authorized_keys"
+        else:
+            auth_keys_path = "~/.ssh/authorized_keys"
+
+    key_path = os.path.expanduser(key_path)
+
+    print(f"Pushing SSH key to {machine.name} ({machine.hostname})...")
+    local_key = get_local_public_key(key_path)
+
+    client_is_posix = os.name == "posix"
+
+    # ssh-copy-id is client-side and only available on POSIX; it also only
+    # works when the remote uses the default ~/.ssh/authorized_keys path.
+    use_ssh_copy_id = client_is_posix and not target_is_windows and auth_keys_path == "~/.ssh/authorized_keys"
+
+    if use_ssh_copy_id:
+        import subprocess
+
+        ssh_cmd = [
+            "ssh-copy-id",
+            "-i",
+            key_path,
+            f"{machine.user}@{machine.hostname}",
+        ]
+        if machine.port != 22:
+            ssh_cmd.insert(1, "-p")
+            ssh_cmd.insert(2, str(machine.port))
+        try:
+            subprocess.run(ssh_cmd, check=True)
+            print("SSH key pushed successfully.")
+        except subprocess.CalledProcessError as e:
+            print(f"Failed to push SSH key: {e}")
+    else:
+        import paramiko
+
+        password = typer.prompt(f"Password for {machine.user}@{machine.hostname}", hide_input=True)
+
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        try:
+            ssh.connect(machine.hostname, username=machine.user, port=machine.port, password=password)
+
+            # Ensure .ssh dir exists, then append key if not already present
+            if target_is_windows:
+                # Windows OpenSSH uses a different file for admin users
+                if not auth_keys_path or auth_keys_path == f"C:\\Users\\{machine.user}\\.ssh\\authorized_keys":
+                    # Check if user is in Administrators group
+                    _, stdout_admin, _ = ssh.exec_command("net localgroup Administrators")
+                    stdout_admin.channel.recv_exit_status()
+                    admin_output = stdout_admin.read().decode()
+                    if (
+                        machine.user.lower() in admin_output.lower()
+                        or machine.user.split("\\")[-1].lower() in admin_output.lower()
+                    ):
+                        auth_keys_path = "C:\\ProgramData\\ssh\\administrators_authorized_keys"
+                        print(f"User is admin — using {auth_keys_path}")
+
+                # Use SFTP to read/write — Windows echo mangles SSH keys
+                sftp = ssh.open_sftp()
+                try:
+                    existing = sftp.open(auth_keys_path, "r").read().decode()
+                except FileNotFoundError:
+                    existing = ""
+                    # Ensure directory exists
+                    ssh_dir = auth_keys_path.rsplit("\\", 1)[0]
+                    _, stdout_mk, _ = ssh.exec_command(f'if not exist "{ssh_dir}" mkdir "{ssh_dir}"')
+                    stdout_mk.channel.recv_exit_status()
+
+                if local_key in existing:
+                    print("SSH key already present on target.")
+                else:
+                    new_content = (
+                        existing.rstrip("\r\n") + "\n" + local_key + "\n" if existing.strip() else local_key + "\n"
+                    )
+                    with sftp.open(auth_keys_path, "w") as f:
+                        f.write(new_content)
+                    print("SSH key pushed successfully.")
+                sftp.close()
+            else:
+                ssh_dir = os.path.dirname(auth_keys_path) if auth_keys_path != "~/.ssh/authorized_keys" else "~/.ssh"
+                check_cmd = f"grep -qxF '{local_key}' {auth_keys_path} 2>/dev/null"
+                mkdir_cmd = f"mkdir -p {ssh_dir} && chmod 700 {ssh_dir}"
+                append_cmd = f"echo '{local_key}' >> {auth_keys_path} && chmod 600 {auth_keys_path}"
+
+                # Create directory
+                _, stdout_mk, stderr_mk = ssh.exec_command(mkdir_cmd)
+                stdout_mk.channel.recv_exit_status()
+
+                # Check if key already exists
+                _, stdout, _ = ssh.exec_command(check_cmd)
+                if stdout.channel.recv_exit_status() == 0:
+                    print("SSH key already present on target.")
+                else:
+                    _, stdout_ap, stderr_ap = ssh.exec_command(append_cmd)
+                    exit_code = stdout_ap.channel.recv_exit_status()
+                    if exit_code != 0:
+                        err = stderr_ap.read().decode().strip()
+                        print(f"Failed to append key (exit {exit_code}): {err}")
+                    else:
+                        print("SSH key pushed successfully.")
+        except Exception as e:
+            print(f"Failed to push SSH key: {e}")
+        finally:
+            ssh.close()
 
 
 if __name__ == "__main__":
