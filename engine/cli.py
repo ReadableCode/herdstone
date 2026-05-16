@@ -101,13 +101,11 @@ def ping(
         ]
         typer.echo(json.dumps(data, indent=2))
     else:
-        name_map = {m.id: m.name for m in targets}
         for r in results:
             host = next((m.hostname for m in targets if m.id == r.machine_id), "")
-            name = name_map.get(r.machine_id, r.machine_id)
             icon = "✓" if r.exit_code == 0 else "✗"
             status = "online" if r.exit_code == 0 else "offline"
-            typer.echo(f"  {icon} {name:<20} {host:<25} {status}  ({r.duration_ms}ms)")
+            typer.echo(f"  {icon} {r.machine_id:<20} {host:<25} {status}  ({r.duration_ms}ms)")
 
 
 def _fmt_bytes(n: int) -> str:

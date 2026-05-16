@@ -10,7 +10,7 @@
 
 ## Architecture
 
-```
+```plaintext
 herdstone/
 ├── pyproject.toml           # Python project config (uv)
 ├── engine/                  # The Python package (import engine.models)
@@ -37,20 +37,6 @@ herdstone/
 ├── cli/
 │   └── herdstone             # Shell script — calls `uv run` into project root
 │
-├── ui_mac/                  # SwiftUI macOS menubar app — Mac only
-│   ├── HerdstoneApp.swift
-│   ├── MenuBarView.swift
-│   ├── MachineRowView.swift
-│   ├── HerdDetailView.swift
-│   ├── CommandPaletteView.swift
-│   └── EngineClient.swift   # Calls CLI script, parses JSON stdout
-│
-├── docs/
-│   ├── architecture.md      # Deeper architecture notes
-│   ├── inventory_format.md  # Inventory file spec + Ansible compatibility
-│   ├── ios_bridge.md        # How the iOS Shortcut bridge works
-│   └── roadmap.md           # Versioned roadmap
-│
 ├── .gitignore
 └── README.md
 ```
@@ -63,26 +49,26 @@ The UI layer (SwiftUI on Mac, PyQt on Linux/Windows) communicates with the engin
 
 ### CLI commands
 
-| Command | Description | Status |
-|---|---|---|
-| `herdstone hosts` | List all machines from inventory | ✅ |
-| `herdstone hosts --json` | List all machines as JSON | ✅ |
-| `herdstone ping {id}` | Ping a single machine | ✅ |
-| `herdstone ping --group {name}` | Ping all machines in a group | ✅ |
-| `herdstone ping --all` | Ping all machines concurrently | ✅ |
-| `herdstone ping --all --json` | Ping all machines, JSON output | ✅ |
-| `herdstone storage {id}` | Show disk usage for a single machine | ✅ |
-| `herdstone storage --group {name}` | Show disk usage for a group | ✅ |
-| `herdstone storage --all` | Show disk usage for all machines | ✅ |
-| `herdstone storage --all --json` | Disk usage, JSON output | ✅ |
-| `herdstone status --json` | List all machines with current status | planned |
-| `herdstone machine {id} --json` | Get single machine detail | planned |
-| `herdstone run {id} {command} --json` | Run a command on a machine | planned |
-| `herdstone run --all {command} --json` | Run a command on all machines | planned |
-| `herdstone run --group {name} {command} --json` | Run a command on a named group | planned |
-| `herdstone push-key {id} --json` | Push a public key to a machine | planned |
-| `herdstone discover --json` | Trigger mDNS/Tailscale discovery scan | planned |
-| `herdstone ios --json` | Get iOS device states (battery, last seen) | planned |
+| Command | Description |
+|---|---|
+| `herdstone hosts` | List all machines from inventory |
+| `herdstone hosts --json` | List all machines as JSON |
+| `herdstone ping {id}` | Ping a single machine |
+| `herdstone ping --group {name}` | Ping all machines in a group |
+| `herdstone ping --all` | Ping all machines concurrently |
+| `herdstone ping --all --json` | Ping all machines, JSON output |
+| `herdstone storage {id}` | Show disk usage for a single machine |
+| `herdstone storage --group {name}` | Show disk usage for a group |
+| `herdstone storage --all` | Show disk usage for all machines |
+| `herdstone storage --all --json` | Disk usage, JSON output |
+| `herdstone status --json` | List all machines with current status |
+| `herdstone machine {id} --json` | Get single machine detail |
+| `herdstone run {id} {command} --json` | Run a command on a machine |
+| `herdstone run --all {command} --json` | Run a command on all machines |
+| `herdstone run --group {name} {command} --json` | Run a command on a named group |
+| `herdstone push-key {id} --json` | Push a public key to a machine |
+| `herdstone discover --json` | Trigger mDNS/Tailscale discovery scan |
+| `herdstone ios --json` | Get iOS device states (battery, last seen) |
 
 All implemented commands support `--json` for machine-readable output.
 
@@ -115,43 +101,6 @@ herdstone storage --all --json
 ```
 
 The `cli/herdstone` script is a thin shell wrapper that runs `uv run` inside `engine/`. The SwiftUI app calls it via `Process()`, reads stdout, and parses JSON.
-
----
-
-## Data Models
-
-### Machine
-
-```python
-@dataclass
-class Machine:
-    id: str                          # UUID, stable across renames
-    name: str                        # Human display name
-    hostname: str                    # DNS name or IP
-    user: str                        # SSH username
-    port: int = 22                   # SSH port
-    groups: list[str] = field(default_factory=list)
-    tags: dict[str, str] = field(default_factory=dict)
-    identity_file: str | None = None # Path to SSH key
-    harness: str = "ssh"             # ssh | ping_only | ios | http
-    status: str = "unknown"          # online | offline | unknown
-    last_seen: datetime | None = None
-    metadata: dict = field(default_factory=dict)  # df -h output, battery, etc.
-```
-
-### CommandResult
-
-```python
-@dataclass
-class CommandResult:
-    machine_id: str
-    command: str
-    stdout: str
-    stderr: str
-    exit_code: int
-    duration_ms: int
-    timestamp: datetime
-```
 
 ---
 
