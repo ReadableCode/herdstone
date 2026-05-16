@@ -1,8 +1,45 @@
 #!/usr/bin/env bash
-# Thin wrapper — delegates to the Python engine via uv
+# Dispatcher — routes to the configured backend engine.
+#
+# Backend selection order (first wins):
+#   1. HERDSTONE_BACKEND env var
+#   2. .herdstone file in repo root (key=value, e.g. backend=go)
+#   3. Default: python
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$SCRIPT_DIR/.."
+CONFIG_FILE="$PROJECT_DIR/.herdstone"
 
-exec uv run --project "$PROJECT_DIR" herdstone "$@"
+# Resolve backend
+BACKEND="${HERDSTONE_BACKEND:-}"
+if [[ -z "$BACKEND" && -f "$CONFIG_FILE" ]]; then
+    BACKEND="$(grep -E '^backend=' "$CONFIG_FILE" | cut -d= -f2 | tr -d '[:space:]')"
+fi
+BACKEND="${BACKEND:-python}"
+
+case "$BACKEND" in
+    python)
+        exec uv run --project "$PROJECT_DIR/backends/python" herdstone "$@"
+        ;;
+    go)
+        BINARY="$PROJECT_DIR/backends/go/herdstone"
+        if [[ ! -x "$BINARY" ]]; then
+            echo "Go backend not built. Run: cd backends/go && go build -o herdstone ./cmd/herdstone" >&2
+            exit 1
+        fi
+        exec "$BINARY" "$@"
+        ;;
+    rust)
+        BINARY="$PROJECT_DIR/backends/rust/target/release/herdstone"
+        if [[ ! -x "$BINARY" ]]; then
+            echo "Rust backend not built. Run: cd backends/rust && cargo build --release" >&2
+            exit 1
+        fi
+        exec "$BINARY" "$@"
+        ;;
+    *)
+        echo "Unknown backend: '$BACKEND'. Valid options: python, go, rust" >&2
+        exit 1
+        ;;
+esac

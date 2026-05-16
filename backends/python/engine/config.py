@@ -2,7 +2,7 @@ from pathlib import Path
 
 # Inventory search path — first match wins
 INVENTORY_SEARCH_PATH = [
-    Path(__file__).resolve().parent.parent.parent / "dotfiles" / "inventory" / "hosts",
+    Path(__file__).resolve().parent.parent.parent.parent.parent / "dotfiles" / "inventory" / "hosts",
     Path.home() / "hosts",
     Path.home() / "herdstone_hosts",
 ]
