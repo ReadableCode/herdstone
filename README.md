@@ -12,30 +12,33 @@
 
 ```plaintext
 herdstone/
-├── pyproject.toml           # Python project config (uv)
-├── engine/                  # The Python package (import engine.models)
-│   ├── __init__.py
-│   ├── models.py            # Dataclasses: Machine, Group, CommandResult, etc.
-│   ├── config.py            # App config, paths, defaults
-│   ├── inventory.py         # Load/save/parse machine inventory (Ansible-compatible)
-│   ├── ssh.py               # SSH harness: connect, run command, push keys
-│   ├── ping.py              # ICMP ping, reachability checks
-│   ├── storage.py           # Disk usage queries (OS-aware: df/PowerShell)
-│   ├── discovery.py         # mDNS/Bonjour + Tailscale API discovery
-│   ├── wol.py               # Wake-on-LAN magic packet sender
-│   ├── health.py            # HTTP health endpoint polling
-│   ├── ios_bridge.py        # iOS device state via iCloud/Shortcuts bridge
-│   ├── command_runner.py    # Run commands across herd (single, group, all)
-│   └── cli.py               # Typer CLI entry point
-│
-├── tests/
-│   ├── test_inventory.py
-│   ├── test_ssh.py
-│   ├── test_ping.py
-│   └── test_discovery.py
+├── backends/
+│   ├── python/              # Python engine (primary)
+│   │   ├── pyproject.toml   # Python project config (uv)
+│   │   ├── engine/          # The Python package (import engine.models)
+│   │   │   ├── __init__.py
+│   │   │   ├── models.py            # Dataclasses: Machine, Group, CommandResult, etc.
+│   │   │   ├── config.py            # App config, paths, defaults
+│   │   │   ├── inventory.py         # Load/save/parse machine inventory (Ansible-compatible)
+│   │   │   ├── ssh.py               # SSH harness: connect, run command, push keys
+│   │   │   ├── ping.py              # ICMP ping, reachability checks
+│   │   │   ├── storage.py           # Disk usage queries (OS-aware: df/PowerShell)
+│   │   │   ├── discovery.py         # mDNS/Bonjour + Tailscale API discovery
+│   │   │   ├── wol.py               # Wake-on-LAN magic packet sender
+│   │   │   ├── health.py            # HTTP health endpoint polling
+│   │   │   ├── ios_bridge.py        # iOS device state via iCloud/Shortcuts bridge
+│   │   │   ├── command_runner.py    # Run commands across herd (single, group, all)
+│   │   │   └── cli.py               # Typer CLI entry point
+│   │   └── tests/
+│   │       ├── test_inventory.py
+│   │       ├── test_ssh.py
+│   │       ├── test_ping.py
+│   │       └── test_discovery.py
+│   ├── go/                  # Go backend (future)
+│   └── rust/                # Rust backend (future)
 │
 ├── cli/
-│   └── herdstone             # Shell script — calls `uv run` into project root
+│   └── herdstone             # Shell script — calls `uv run` into backends/python
 │
 ├── .gitignore
 └── README.md
@@ -221,11 +224,17 @@ groups:
 git clone git@github.com:ReadableCode/herdstone.git
 cd herdstone
 
-# Install Python dependencies
+# Install Python 3.14 if not already available (required)
+# Note: installs a pre-release; pin it so uv uses it
+uv python install 3.14
+uv python pin 3.14
+
+# Install Python dependencies (must be run from backends/python)
+cd backends/python
 uv sync
 
 # Run the CLI (start here, no UI needed)
-./cli/herdstone --help
+uv run herdstone --help
 
 # Run tests
 uv run pytest
@@ -237,15 +246,15 @@ uv run pytest
 
 If picking this up fresh, build in this order:
 
-1. `engine/models.py` — dataclasses only, no logic
-2. `engine/config.py` — paths, defaults, config file loading
-3. `engine/inventory.py` — load/save YAML inventory, Ansible import
-4. `engine/ping.py` — ICMP ping, async, returns `CommandResult`
-5. `engine/ssh.py` — connect, run command, push key, async
-6. `engine/command_runner.py` — fan out commands to one/group/all machines concurrently
-7. `engine/cli.py` — Typer CLI entry point, `--json` flag on all commands
-8. `cli/herdstone` — shell script wrapper calling `uv run`
-9. `tests/` — unit tests for each engine module
+1. `backends/python/engine/models.py` — dataclasses only, no logic
+2. `backends/python/engine/config.py` — paths, defaults, config file loading
+3. `backends/python/engine/inventory.py` — load/save YAML inventory, Ansible import
+4. `backends/python/engine/ping.py` — ICMP ping, async, returns `CommandResult`
+5. `backends/python/engine/ssh.py` — connect, run command, push key, async
+6. `backends/python/engine/command_runner.py` — fan out commands to one/group/all machines concurrently
+7. `backends/python/engine/cli.py` — Typer CLI entry point, `--json` flag on all commands
+8. `cli/herdstone` — shell script wrapper calling `uv run` from `backends/python`
+9. `backends/python/tests/` — unit tests for each engine module
 10. `ui_mac/` — SwiftUI menubar app, calls CLI script and parses JSON stdout
 
 Do not start the SwiftUI layer until the engine passes all tests and the CLI is fully functional. The UI should never contain business logic.

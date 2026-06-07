@@ -66,7 +66,7 @@ def _parse_df_output(machine_id: str, stdout: str) -> list[DriveInfo]:
             avail_kb = int(parts[3])
             pct_str = parts[4].rstrip("%")
             use_pct = float(pct_str)
-        except ValueError, IndexError:
+        except (ValueError, IndexError):
             continue
 
         drives.append(
@@ -91,7 +91,7 @@ def _parse_powershell_output(machine_id: str, stdout: str) -> list[DriveInfo]:
     drives: list[DriveInfo] = []
     try:
         data = json.loads(stdout)
-    except json.JSONDecodeError, ValueError:
+    except (json.JSONDecodeError, ValueError):
         return drives
 
     if isinstance(data, dict):

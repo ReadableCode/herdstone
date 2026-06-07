@@ -10,12 +10,13 @@ async def ping_one(machine: Machine, count: int = 1, timeout: int = 2) -> Comman
     """Ping a single machine using the system ping command."""
     start = time.monotonic()
     is_windows = platform.system().lower() == "windows"
+    timeout_arg = str(timeout * 1000) if is_windows else str(timeout)
     cmd = [
         "ping",
         "-n" if is_windows else "-c",
         str(count),
         "-w" if is_windows else "-W",
-        str(timeout),
+        timeout_arg,
         machine.hostname,
     ]
 
