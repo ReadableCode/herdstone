@@ -1,262 +1,211 @@
 # Herdstone
 
-> A cross-platform machine herd monitor with a native menubar UI. See which machines are online, run commands across your herd, manage SSH keys, and monitor iOS devices.
-
----
-
-## Vision
+> A cross-platform machine herd monitor **and household media remote**. See which
+> machines are online, run commands across your herd, and search/add shows and
+> movies across every Sonarr/Radarr/Plex instance you run — from one CLI, TUI,
+> or phone-friendly web UI.
 
 ---
 
 ## Architecture
 
+One Python engine, three thin presentation layers. There is no internal REST
+API — the CLI, TUI, and web UI all import the same `engine` package and call
+the same functions in-process.
+
 ```plaintext
 herdstone/
-├── backends/
-│   ├── python/              # Python engine (primary)
-│   │   ├── pyproject.toml   # Python project config (uv)
-│   │   ├── engine/          # The Python package (import engine.models)
-│   │   │   ├── __init__.py
-│   │   │   ├── models.py            # Dataclasses: Machine, Group, CommandResult, etc.
-│   │   │   ├── config.py            # App config, paths, defaults
-│   │   │   ├── inventory.py         # Load/save/parse machine inventory (Ansible-compatible)
-│   │   │   ├── ssh.py               # SSH harness: connect, run command, push keys
-│   │   │   ├── ping.py              # ICMP ping, reachability checks
-│   │   │   ├── storage.py           # Disk usage queries (OS-aware: df/PowerShell)
-│   │   │   ├── discovery.py         # mDNS/Bonjour + Tailscale API discovery
-│   │   │   ├── wol.py               # Wake-on-LAN magic packet sender
-│   │   │   ├── health.py            # HTTP health endpoint polling
-│   │   │   ├── ios_bridge.py        # iOS device state via iCloud/Shortcuts bridge
-│   │   │   ├── command_runner.py    # Run commands across herd (single, group, all)
-│   │   │   └── cli.py               # Typer CLI entry point
-│   │   └── tests/
-│   │       ├── test_inventory.py
-│   │       ├── test_ssh.py
-│   │       ├── test_ping.py
-│   │       └── test_discovery.py
-│   ├── go/                  # Go backend (future)
-│   └── rust/                # Rust backend (future)
-│
-├── cli/
-│   └── herdstone             # Shell script — calls `uv run` into backends/python
-│
-├── .gitignore
+├── backends/python/
+│   ├── pyproject.toml        # Python project config (uv)
+│   ├── engine/               # The engine package
+│   │   ├── models.py             # Machine, Service, CommandResult dataclasses
+│   │   ├── config.py             # hosts.json search path, .env loading
+│   │   ├── inventory.py          # hosts.json parser + Ansible INI importer
+│   │   ├── ping.py               # concurrent ICMP reachability
+│   │   ├── ssh.py                # run commands over SSH (or locally)
+│   │   ├── storage.py            # disk usage (df / PowerShell, OS-aware)
+│   │   ├── cli.py                # Typer entry point (doubles as IPC bridge, --json everywhere)
+│   │   ├── media/                # media remote core (shared by CLI/TUI/web)
+│   │   │   ├── config.py             # builds instance list from hosts.json services + .env
+│   │   │   ├── models.py             # pydantic domain models (AggregatedResult, ...)
+│   │   │   ├── aggregation.py        # search_everywhere, add_to_instance, plex checks
+│   │   │   └── clients/              # httpx async clients: sonarr, radarr, plex
+│   │   ├── tui/app.py            # Textual TUI (couch/SSH use)
+│   │   └── web/app.py            # NiceGUI web UI (phone use, Tailscale-bound)
+│   └── tests/
+├── cli/herdstone             # shell wrapper: uv run into backends/python
+├── .env -> ../personal_credentials/personal.env   # symlink, gitignored
+├── .env.example              # API key placeholders
 └── README.md
+
+../dotfiles/inventory/hosts.json   # THE inventory — machines + services they offer
 ```
 
 ---
 
-## CLI as IPC Bridge
+## Inventory: `hosts.json`
 
-The UI layer (SwiftUI on Mac, PyQt on Linux/Windows) communicates with the engine by calling the CLI as a subprocess. All commands support a `--json` flag for machine-readable output.
+One JSON file is the single source of truth for the herd. Each host declares
+how to reach it (`harness`: `ssh` / `ping` / `none`) and, crucially, **which
+services it offers**. Adding another Sonarr/Radarr/Plex instance is a
+config-only change — no code.
 
-### CLI commands
+```json
+{
+  "hosts": [
+    {
+      "name": "behemoth",
+      "hostname": "192.168.86.31",
+      "user": "root",
+      "os": "linux",
+      "harness": "ssh",
+      "groups": ["unraid"],
+      "aliases": ["sshbehemoth"],
+      "services": [
+        { "type": "sonarr", "name": "sonarr-behemoth", "port": 8989,  "api_key_env": "SONARR_BEHEMOTH_API_KEY" },
+        { "type": "radarr", "name": "radarr-behemoth", "port": 7878,  "api_key_env": "RADARR_BEHEMOTH_API_KEY" },
+        { "type": "plex",   "name": "plex-behemoth",   "port": 32400, "api_key_env": "PLEX_BEHEMOTH_TOKEN" }
+      ]
+    }
+  ]
+}
+```
 
-| Command | Description |
-|---|---|
-| `herdstone hosts` | List all machines from inventory |
-| `herdstone hosts --json` | List all machines as JSON |
-| `herdstone ping {id}` | Ping a single machine |
-| `herdstone ping --group {name}` | Ping all machines in a group |
-| `herdstone ping --all` | Ping all machines concurrently |
-| `herdstone ping --all --json` | Ping all machines, JSON output |
-| `herdstone storage {id}` | Show disk usage for a single machine |
-| `herdstone storage --group {name}` | Show disk usage for a group |
-| `herdstone storage --all` | Show disk usage for all machines |
-| `herdstone storage --all --json` | Disk usage, JSON output |
-| `herdstone status --json` | List all machines with current status |
-| `herdstone machine {id} --json` | Get single machine detail |
-| `herdstone run {id} {command} --json` | Run a command on a machine |
-| `herdstone run --all {command} --json` | Run a command on all machines |
-| `herdstone run --group {name} {command} --json` | Run a command on a named group |
-| `herdstone push-key {id} --json` | Push a public key to a machine |
-| `herdstone discover --json` | Trigger mDNS/Tailscale discovery scan |
-| `herdstone ios --json` | Get iOS device states (battery, last seen) |
+Optional service fields: `scheme` (default `http`), `base_url` (full override),
+`quality_profile` and `root_folder` (preferred add-time defaults; first
+available on the server otherwise).
 
-All implemented commands support `--json` for machine-readable output.
+Search order: `$HERDSTONE_HOSTS` → `../dotfiles/inventory/hosts.json` (canonical,
+lives next to the Ansible INI it was converted from) → repo-root `hosts.json` →
+`~/.config/herdstone/hosts.json` → `~/herdstone_hosts.json`.
 
-#### Examples
+Secrets never live in the inventory — each service names the env var
+(`api_key_env`) that holds its key/token. `.env` in this repo is a gitignored
+symlink to `../personal_credentials/personal.env` (see `.env.example` for the
+expected keys). Migrating from an Ansible INI inventory:
 
 ```bash
-# List all hosts from inventory
-herdstone hosts
-
-# Ping all machines concurrently (~1-2s regardless of host count)
-herdstone ping --all
-
-# Ping just the macs group
-herdstone ping --group macs
-
-# Ping a single host by alias
-herdstone ping sshbehemoth
-
-# JSON output (for scripting or UI consumption)
-herdstone ping --group raspbian --json
-
-# Show disk usage for all raspberry pis
-herdstone storage --group raspbian
-
-# Show disk usage for a single host
-herdstone storage sshelite
-
-# Show all disk usage as JSON
-herdstone storage --all --json
-```
-
-The `cli/herdstone` script is a thin shell wrapper that runs `uv run` inside `engine/`. The SwiftUI app calls it via `Process()`, reads stdout, and parses JSON.
-
----
-
-## Connection Harnesses
-
-Herdstone supports multiple harness types per machine. The harness defines how Herdstone communicates with a device.
-
-| Harness | Use Case | Status |
-|---|---|---|
-| `ssh` | Linux servers, remote Macs, VMs, Raspberry Pi | v1 |
-| `ping` | Any reachable host, no credentials needed | v1 |
-| `mdns` | Local network auto-discovery via Bonjour/Avahi | v1 |
-| `tailscale` | Machines on a Tailscale network, auto-inventory | v2 |
-| `http` | Services exposing a `/health` endpoint | v2 |
-| `wol` | Wake sleeping machines on LAN | v2 |
-| `ios` | iOS devices via Shortcuts + iCloud bridge | v3 |
-
----
-
-## Inventory Format
-
-Herdstone uses an extended YAML format that is a superset of Ansible's YAML inventory. An existing Ansible inventory can be imported directly.
-
-```yaml
-# herdstone_inventory.yaml
-
-groups:
-  servers:
-    hosts:
-      web01:
-        hostname: web01.example.com
-        user: ubuntu
-        identity_file: ~/.ssh/id_ed25519
-        harness: ssh
-        tags:
-          env: production
-          role: web
-
-      pi-home:
-        hostname: 192.168.1.42
-        user: pi
-        harness: ssh
-        tags:
-          env: home
-          role: media
-
-  macs:
-    hosts:
-      macbook-work:
-        hostname: macbook-work.local
-        user: dev
-        harness: ssh
-
-  ios_devices:
-    hosts:
-      iphone-personal:
-        harness: ios
-        icloud_key: iphone_personal_state   # key in shared iCloud KV file
+herdstone import-ansible ~/GitHub/dotfiles/inventory/hosts -o hosts.json
 ```
 
 ---
 
-## Versioned Roadmap
+## CLI
 
-### v1 — Core SSH Herd Monitor (Mac menubar)
+| Command | Description |
+| --- | --- |
+| `herdstone hosts` | List all machines (`--json` for machine-readable) |
+| `herdstone ping {id\|--group g\|--all}` | Ping machines concurrently |
+| `herdstone storage {id\|--group g\|--all}` | Disk usage per machine |
+| `herdstone run ...` | Run a command across the herd *(planned)* |
+| `herdstone push-key {id}` | Push your SSH public key to a machine |
+| `herdstone import-ansible {path}` | Convert an Ansible INI inventory to hosts.json |
+| `herdstone media instances` | Show configured Sonarr/Radarr/Plex instances |
+| `herdstone media search "title" [-t tv\|movie] [--plex]` | Search every instance, one merged status view |
+| `herdstone media add "title" --to {instance}` | Add the top result to a chosen instance |
+| `herdstone tui` | Launch the media remote TUI (Textual) |
+| `herdstone web [--host IP] [--port 8787]` | Launch the media remote web UI (NiceGUI) |
 
-- [ ] Python engine: inventory load/save, SSH harness, ping harness
-- [ ] CLI: ping all, run command on one/all/group, push SSH key, `--json` output
-- [ ] SwiftUI menubar app: online/offline status per machine (calls CLI as subprocess)
-- [ ] Run preset or custom command on one machine, a group, or all
-- [ ] Push public SSH key from one machine to another
-- [ ] `df -h`, `uptime`, `uname` quick commands built in
-- [ ] Import Ansible INI/YAML inventory
+All data commands support `--json`, which is how native UI shells (SwiftUI
+menubar app, etc.) consume the engine as a subprocess.
 
-### v2 — Discovery + Integrations
+### Media remote in 30 seconds
 
-- [ ] mDNS/Bonjour local network auto-discovery
-- [ ] Tailscale API integration (auto-populate herd from Tailscale)
-- [ ] HTTP health endpoint polling
-- [ ] Wake-on-LAN
-- [ ] Alert on machine going offline (Mac notification)
-- [ ] Command history with output viewer
+```bash
+herdstone media instances     # verify what's configured (keys come from .env)
+herdstone media search "severance" --plex
+#   Severance (2022)  [tvdb:371980]
+#     ● sonarr-behemoth      monitored_complete
+#     ○ sonarr-elitedesk     not_present
+#     ▶ plex-behemoth        watch-ready
+herdstone media add "severance" --to sonarr-elitedesk
+```
 
-### v3 — iOS + Multi-platform
+Statuses merge by TVDB/TMDB id (never by title string), one instance being
+down degrades to a `✗ unreachable` row instead of breaking the search, and
+Plex rows tell you whether it's actually watch-ready.
 
-- [ ] iOS device state via Shortcut + iCloud bridge (battery, last seen, device name)
-- [ ] Linux tray app (PyQt or TUI)
-- [ ] Windows tray app
+### Web UI deployment
 
-### v4 — Polish + App Store
+Runs as a single process; bind it to your Tailscale IP on an always-on box so
+phones on the tailnet can reach it. Never expose it publicly — there is no
+auth layer by design (tailnet membership is the auth).
 
-- [ ] Mac App Store submission
-- [ ] Onboarding flow for new users
-- [ ] Settings UI (manage inventory, SSH keys, groups)
-- [ ] Dark/light mode, menubar icon states
-
----
-
-## Tech Stack
-
-| Layer | Technology | Reason |
-|---|---|---|
-| Engine | Python 3.14+ | Cross-platform, mature SSH/networking libs, existing author expertise |
-| SSH | `asyncssh` | Async, well-maintained, no native dependency headaches |
-| Ping | `icmplib` | Cross-platform ICMP, clean API |
-| mDNS | `zeroconf` | Cross-platform Bonjour/Avahi |
-| CLI | `typer` | CLI wraps engine, doubles as IPC bridge for SwiftUI via `--json` |
-| Dependency mgmt | `uv` | Author's existing standard |
-| Mac UI | SwiftUI | Native Mac menubar, App Store compatible |
-| Linux/Win UI | PyQt6 (future) | Reuses Python engine directly |
+```bash
+herdstone web --host 100.x.x.x --port 8787
+```
 
 ---
 
 ## Development Setup
 
 ```bash
-# Clone
 git clone git@github.com:ReadableCode/herdstone.git
 cd herdstone
 
-# Install Python 3.14 if not already available (required)
-# Note: installs a pre-release; pin it so uv uses it
 uv python install 3.14
 uv python pin 3.14
 
-# Install Python dependencies (must be run from backends/python)
 cd backends/python
 uv sync
-
-# Run the CLI (start here, no UI needed)
 uv run herdstone --help
-
-# Run tests
 uv run pytest
+uv run ruff check .
 ```
 
 ---
 
-## Build Order for Claude Code
+## Connection Harnesses
 
-If picking this up fresh, build in this order:
-
-1. `backends/python/engine/models.py` — dataclasses only, no logic
-2. `backends/python/engine/config.py` — paths, defaults, config file loading
-3. `backends/python/engine/inventory.py` — load/save YAML inventory, Ansible import
-4. `backends/python/engine/ping.py` — ICMP ping, async, returns `CommandResult`
-5. `backends/python/engine/ssh.py` — connect, run command, push key, async
-6. `backends/python/engine/command_runner.py` — fan out commands to one/group/all machines concurrently
-7. `backends/python/engine/cli.py` — Typer CLI entry point, `--json` flag on all commands
-8. `cli/herdstone` — shell script wrapper calling `uv run` from `backends/python`
-9. `backends/python/tests/` — unit tests for each engine module
-10. `ui_mac/` — SwiftUI menubar app, calls CLI script and parses JSON stdout
-
-Do not start the SwiftUI layer until the engine passes all tests and the CLI is fully functional. The UI should never contain business logic.
+| Harness | Use Case | Status |
+| --- | --- | --- |
+| `ssh` | Linux servers, Macs, Windows (OpenSSH), Termux, Raspberry Pi | v1 |
+| `ping` | Any reachable host, no credentials needed | v1 |
+| `none` | Tracked-but-unreachable devices (IoT, consoles, iOS) | v1 |
+| `mdns` | Local network auto-discovery via Bonjour/Avahi | v2 |
+| `tailscale` | Auto-inventory from the Tailscale API | v2 |
+| `http` | Services exposing a `/health` endpoint | v2 |
+| `wol` | Wake sleeping machines on LAN | v2 |
+| `ios` | iOS devices via Shortcuts + iCloud bridge | v3 |
 
 ---
+
+## Versioned Roadmap
+
+### v1 — Core herd monitor + media remote
+
+- [x] JSON inventory (`hosts.json`) with per-host services
+- [x] Ansible INI import
+- [x] Concurrent ping, disk usage, SSH key push, `--json` everywhere
+- [x] Media core: multi-instance Sonarr/Radarr search/status/add, Plex watch-readiness
+- [x] Media TUI (Textual) and mobile web UI (NiceGUI)
+- [ ] `herdstone run` command runner (one/group/all)
+- [ ] SwiftUI menubar app (calls CLI as subprocess)
+
+### v2 — Discovery + Integrations
+
+- [ ] mDNS/Bonjour local network auto-discovery
+- [ ] Tailscale API integration (auto-populate herd)
+- [ ] HTTP health endpoint polling
+- [ ] Wake-on-LAN
+- [ ] Offline alerts (Mac notification)
+
+### v3 — iOS + Multi-platform
+
+- [ ] iOS device state via Shortcut + iCloud bridge
+- [ ] Linux/Windows tray apps
+
+---
+
+## Tech Stack
+
+| Layer | Technology | Reason |
+| --- | --- | --- |
+| Engine | Python 3.14 + uv | Cross-platform, author's standard |
+| CLI | `typer` | Doubles as IPC bridge via `--json` |
+| HTTP clients | `httpx` (async) | Concurrent fan-out to all instances |
+| Domain models | `pydantic` | Validated media models, clean JSON serialization |
+| Secrets | `python-dotenv` | `.env`-based keys referenced from hosts.json |
+| TUI | `textual` | Keyboard-driven couch/SSH interface |
+| Web UI | `nicegui` | Server-rendered, calls engine in-process — no hand-built API layer |
+| Mac UI (planned) | SwiftUI | Native menubar, App Store compatible |

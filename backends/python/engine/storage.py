@@ -4,19 +4,6 @@ from dataclasses import dataclass
 from .models import Machine
 from .ssh import run_ssh_command
 
-# Map inventory groups to OS families
-WINDOWS_GROUPS = {"windows_workstations", "hellofresh_windows", "rebeca_windows", "crown_windows"}
-UNIX_GROUPS = {
-    "linux_workstations",
-    "macs",
-    "work_linux",
-    "fourteen_foods",
-    "unraid",
-    "raspbian",
-    "android",
-    "ginamary",
-}
-
 
 @dataclass
 class DriveInfo:
@@ -30,13 +17,8 @@ class DriveInfo:
 
 
 def _get_os_family(machine: Machine) -> str:
-    """Infer OS family from inventory group membership."""
-    for group in machine.groups:
-        if group in WINDOWS_GROUPS:
-            return "windows"
-        if group in UNIX_GROUPS:
-            return "unix"
-    return "unix"
+    """Map the inventory os field to the command family used for disk queries."""
+    return "windows" if machine.os == "windows" else "unix"
 
 
 def _parse_df_output(machine_id: str, stdout: str) -> list[DriveInfo]:

@@ -5,36 +5,64 @@ from typing import Optional
 
 import typer
 
-from .inventory import parse_inventory
+from .inventory import find_machine, machines_to_json, parse_ansible_ini, parse_inventory
+from .media.cli import media_app
 from .ping import ping_many, ping_one  # noqa: F401
 from .storage import get_storage_many
 
 app = typer.Typer(name="herdstone", help="Herdstone — machine herd monitor")
+app.add_typer(media_app)
+
+
+@app.command()
+def tui():
+    """Launch the media remote TUI (Textual)."""
+    from .tui.app import run_tui
+
+    run_tui()
+
+
+@app.command()
+def web(
+    host: str = typer.Option("127.0.0.1", "--host", help="Interface to bind (use your Tailscale IP to share)"),
+    port: int = typer.Option(8787, "--port", help="Port to listen on"),
+):
+    """Launch the media remote web UI (NiceGUI)."""
+    from .web.app import run_web
+
+    run_web(host=host, port=port)
 
 
 def _resolve_targets(
     target: Optional[str] = None,
     group: Optional[str] = None,
     all_hosts: bool = False,
+    reachable_only: bool = True,
 ) -> list:
-    """Resolve a target host, group, or --all into a list of machines."""
+    """Resolve a target host, group, or --all into a list of machines.
+
+    For group/--all selections, hosts with harness "none" are excluded when
+    reachable_only is set (they have nothing to ping or SSH to).
+    """
     machines = parse_inventory()
     if not machines:
-        typer.echo("No inventory file found or no hosts with ssh_alias.")
+        typer.echo("No inventory found. Expected hosts.json (see README) or HERDSTONE_HOSTS.")
         raise typer.Exit(1)
 
     if all_hosts:
-        return machines
+        return [m for m in machines if m.harness != "none"] if reachable_only else machines
 
     if group:
         matched = [m for m in machines if group in m.groups]
+        if reachable_only:
+            matched = [m for m in matched if m.harness != "none"]
         if not matched:
             typer.echo(f"No machines found in group '{group}'.")
             raise typer.Exit(1)
         return matched
 
     if target:
-        matched = [m for m in machines if m.id == target or m.name == target]
+        matched = find_machine(machines, target)
         if not matched:
             typer.echo(f"Machine '{target}' not found.")
             raise typer.Exit(1)
@@ -55,7 +83,7 @@ def hosts(output_json: bool = typer.Option(False, "--json", help="Output as JSON
     """List all hosts from the inventory."""
     machines = parse_inventory()
     if not machines:
-        typer.echo("No inventory file found or no hosts with ssh_alias.")
+        typer.echo("No inventory found. Expected hosts.json (see README) or HERDSTONE_HOSTS.")
         raise typer.Exit(1)
 
     if output_json:
@@ -66,15 +94,48 @@ def hosts(output_json: bool = typer.Option(False, "--json", help="Output as JSON
                 "hostname": m.hostname,
                 "user": m.user,
                 "port": m.port,
+                "os": m.os,
+                "harness": m.harness,
                 "groups": m.groups,
+                "aliases": m.aliases,
+                "services": [{"type": s.type, "name": s.name, "port": s.port} for s in m.services],
             }
             for m in machines
         ]
         typer.echo(json.dumps(data, indent=2))
     else:
         for m in machines:
-            port_str = f" -p {m.port}" if m.port != 22 else ""
-            typer.echo(f"  {m.id:<20} ssh {m.user}@{m.hostname}{port_str}  [{', '.join(m.groups)}]")
+            if m.harness == "ssh":
+                port_str = f" -p {m.port}" if m.port != 22 else ""
+                conn = f"ssh {m.user}@{m.hostname}{port_str}"
+            else:
+                conn = f"{m.harness}: {m.hostname}" if m.harness != "none" else "(no harness)"
+            svc = f"  {{{', '.join(s.name for s in m.services)}}}" if m.services else ""
+            typer.echo(f"  {m.name:<22} {conn:<45} [{', '.join(m.groups)}]{svc}")
+
+
+@app.command("import-ansible")
+def import_ansible(
+    path: str = typer.Argument(..., help="Path to an Ansible INI inventory file"),
+    output: str = typer.Option("hosts.json", "--output", "-o", help="Where to write the JSON inventory"),
+    force: bool = typer.Option(False, "--force", "-f", help="Overwrite the output file if it exists"),
+):
+    """Convert an Ansible INI inventory into a hosts.json inventory."""
+    from pathlib import Path
+
+    src = Path(path).expanduser()
+    if not src.is_file():
+        typer.echo(f"Inventory file not found: {src}")
+        raise typer.Exit(1)
+
+    dest = Path(output).expanduser()
+    if dest.exists() and not force:
+        typer.echo(f"{dest} already exists — use --force to overwrite.")
+        raise typer.Exit(1)
+
+    machines = parse_ansible_ini(src)
+    dest.write_text(machines_to_json(machines) + "\n")
+    typer.echo(f"Wrote {len(machines)} hosts to {dest}")
 
 
 @app.command()
@@ -189,7 +250,7 @@ def push_key(
         raise typer.Exit(1)
     machine = targets[0]
 
-    target_is_windows = any("windows" in g.lower() for g in machine.groups)
+    target_is_windows = machine.os == "windows"
 
     if not auth_keys_path:
         if target_is_windows:

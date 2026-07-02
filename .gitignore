@@ -1,8 +1,13 @@
+# Secrets
+.env
+
 # Python
 __pycache__/
 *.pyc
 *.pyo
 .venv/
+.pytest_cache/
+.mypy_cache/
 
 # uv
 uv.lock
