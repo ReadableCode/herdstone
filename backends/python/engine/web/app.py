@@ -23,6 +23,14 @@ STATE_BADGE = {
 }
 
 
+def _badge(status) -> tuple[str, str]:
+    label, color = STATE_BADGE[status.state]
+    # A movie is either downloaded or not — "partial" only makes sense for TV
+    if status.state == PresenceState.MONITORED_INCOMPLETE and status.missing_episode_count is None:
+        label = "◐ not downloaded"
+    return label, color
+
+
 def _short(instance_name: str) -> str:
     """Compact instance label for badges: 'sonarr-behemoth' -> 'behemoth'."""
     return instance_name.split("-", 1)[-1]
@@ -71,7 +79,7 @@ def run_web(host: str = "127.0.0.1", port: int = 8787) -> None:
                         ui.label(f"{r.title}{year}").classes("text-lg font-bold")
                         with ui.row().classes("gap-1"):
                             for status in aggregated.statuses:
-                                label, color = STATE_BADGE[status.state]
+                                label, color = _badge(status)
                                 ui.badge(f"{_short(status.instance)} {label}", color=color)
 
         async def open_detail(aggregated: AggregatedResult) -> None:
@@ -106,7 +114,7 @@ def run_web(host: str = "127.0.0.1", port: int = 8787) -> None:
                     status_area.clear()
                     with status_area:
                         for status in aggregated.statuses:
-                            label, color = STATE_BADGE[status.state]
+                            label, color = _badge(status)
                             line = f"{status.instance}: {label}"
                             if (
                                 status.state == PresenceState.MONITORED_INCOMPLETE

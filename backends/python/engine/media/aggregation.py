@@ -6,6 +6,7 @@ that kills the whole search.
 """
 
 import asyncio
+import time
 
 from .clients import PlexClient, RadarrClient, SonarrClient
 from .config import ArrInstance, MediaConfig, load_media_config
@@ -31,46 +32,85 @@ def _external_key(item: dict, media_type: MediaType) -> str:
     return f"title:{item.get('title', '').casefold()}:{item.get('year') or 0}"
 
 
+# Library snapshots per instance, indexed by external id. Lookup responses lie
+# about presence detail (Radarr omits hasFile, Sonarr omits season statistics),
+# so statuses are derived from the instance's real library instead. A short TTL
+# keeps search-as-you-type from refetching the library on every keystroke.
+_LIBRARY_TTL_SECONDS = 60.0
+_library_cache: dict[str, tuple[float, dict[int, dict]]] = {}
+
+
+def invalidate_library_cache(instance_name: str | None = None) -> None:
+    if instance_name is None:
+        _library_cache.clear()
+    else:
+        _library_cache.pop(instance_name, None)
+
+
+async def _library_index(client: SonarrClient | RadarrClient) -> dict[int, dict]:
+    now = time.monotonic()
+    cached = _library_cache.get(client.name)
+    if cached and now - cached[0] < _LIBRARY_TTL_SECONDS:
+        return cached[1]
+    id_field = "tvdbId" if isinstance(client, SonarrClient) else "tmdbId"
+    index = {item[id_field]: item for item in await client.get_library() if item.get(id_field)}
+    _library_cache[client.name] = (now, index)
+    return index
+
+
+async def _instance_snapshot(client: SonarrClient | RadarrClient, query: str) -> dict:
+    """One instance's search results plus its library keyed by external id."""
+    results, library = await asyncio.gather(client.lookup(query), _library_index(client))
+    return {"results": results, "library": library}
+
+
 def merge_lookups(
-    per_instance: dict[str, list[dict] | Exception],
+    per_instance: dict[str, dict | Exception],
     media_type: MediaType,
     config: MediaConfig,
 ) -> list[AggregatedResult]:
-    """Merge per-instance lookup results into one AggregatedResult per unique title.
+    """Merge per-instance snapshots into one AggregatedResult per unique title.
 
     Merging is keyed on external IDs (TVDB/TMDB), not title strings, so
-    similarly-named shows never collapse into one entry. Every configured
-    instance gets a status row on every result: NOT_PRESENT when its search
-    didn't have the title, UNREACHABLE when the instance itself errored.
+    similarly-named shows never collapse into one entry. Presence comes from
+    each instance's library record (authoritative), not the lookup item. Every
+    configured instance gets a status row on every result: NOT_PRESENT when
+    its library lacks the title, UNREACHABLE when the instance itself errored.
     """
     merged: dict[str, AggregatedResult] = {}
-    items_by_key: dict[str, dict[str, dict]] = {}  # key -> instance -> raw item
+    items_by_key: dict[str, dict[str, dict]] = {}  # key -> instance -> raw lookup item
 
     for instance in config.arr_instances(media_type.value):
-        results = per_instance.get(instance.name)
-        if isinstance(results, Exception) or results is None:
+        snapshot = per_instance.get(instance.name)
+        if not isinstance(snapshot, dict):
             continue
         client = _client_for(instance, media_type)
-        for item in results:
+        for item in snapshot["results"]:
             key = _external_key(item, media_type)
             if key not in merged:
                 merged[key] = AggregatedResult(result=client.to_search_result(item))
             items_by_key.setdefault(key, {})[instance.name] = item
 
     for aggregated_key, aggregated in merged.items():
+        result = aggregated.result
+        ext_id = result.tvdb_id if media_type == MediaType.TV else result.tmdb_id
         for instance in config.arr_instances(media_type.value):
-            results = per_instance.get(instance.name)
-            if isinstance(results, Exception):
+            snapshot = per_instance.get(instance.name)
+            if not isinstance(snapshot, dict):
                 aggregated.statuses.append(
                     InstanceStatus(
                         instance=instance.name,
                         state=PresenceState.UNREACHABLE,
-                        error=str(results),
+                        error=str(snapshot),
                     )
                 )
                 continue
             client = _client_for(instance, media_type)
-            item = items_by_key.get(aggregated_key, {}).get(instance.name)
+            if ext_id:
+                item = snapshot["library"].get(ext_id)
+            else:
+                # No external id to match on — fall back to the lookup item
+                item = items_by_key.get(aggregated_key, {}).get(instance.name)
             aggregated.statuses.append(client.to_status(item))
 
     return list(merged.values())
@@ -89,9 +129,9 @@ async def search_everywhere(
         return []
 
     clients = [_client_for(i, media_type) for i in instances]
-    results = await asyncio.gather(*(c.lookup(query) for c in clients), return_exceptions=True)
-    per_instance: dict[str, list[dict] | Exception] = {
-        c.name: r for c, r in zip(clients, results)  # type: ignore[misc]
+    snapshots = await asyncio.gather(*(_instance_snapshot(c, query) for c in clients), return_exceptions=True)
+    per_instance: dict[str, dict | Exception] = {
+        c.name: s for c, s in zip(clients, snapshots)  # type: ignore[misc]
     }
     return merge_lookups(per_instance, media_type, config)
 
@@ -116,6 +156,7 @@ async def refresh_status(
     """Re-poll every instance (and optionally Plex) for one title by its external ID."""
     if config is None:
         config = load_media_config()
+    invalidate_library_cache()  # an explicit refresh must not serve cached presence
     result = aggregated.result
     # tvdb:/tmdb: keys work as lookup terms; title-keyed results fall back to a title search
     term = result.title if result.external_key.startswith("title:") else result.external_key
@@ -255,6 +296,7 @@ async def add_to_instance(
     except Exception as exc:  # noqa: BLE001 — surfaced to the UI as a failed add
         return AddResult(instance=instance_name, ok=False, message=str(exc))
 
+    invalidate_library_cache(instance_name)  # so the next search/refresh sees the new title
     return AddResult(instance=instance_name, ok=True, message=f"Added '{result.title}' to {instance_name}")
 
 

@@ -191,7 +191,10 @@ class MediaRemote(App):
         lines.append("")
         for status in aggregated.statuses:
             glyph = STATE_GLYPHS[status.state]
-            line = f"{glyph} {status.instance}: {STATE_LABELS[status.state]}"
+            label = STATE_LABELS[status.state]
+            if status.state == PresenceState.MONITORED_INCOMPLETE and status.missing_episode_count is None:
+                label = "not downloaded"  # movie without a file
+            line = f"{glyph} {status.instance}: {label}"
             if status.state == PresenceState.MONITORED_INCOMPLETE and status.missing_episode_count is not None:
                 line += f" — missing {status.missing_episode_count}/{status.total_episode_count} eps"
             lines.append(line)

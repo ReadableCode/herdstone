@@ -39,8 +39,10 @@ def _render_result(aggregated: AggregatedResult) -> None:
     for s in aggregated.statuses:
         glyph = STATE_GLYPHS[s.state]
         detail = ""
-        if s.state == PresenceState.MONITORED_INCOMPLETE and s.missing_episode_count is not None:
-            if s.total_episode_count == 0:
+        if s.state == PresenceState.MONITORED_INCOMPLETE:
+            if s.missing_episode_count is None:
+                detail = "  in library, not downloaded"  # movie without a file
+            elif s.total_episode_count == 0:
                 detail = "  in library, no monitored episodes"
             else:
                 detail = f"  missing {s.missing_episode_count}/{s.total_episode_count} episodes"

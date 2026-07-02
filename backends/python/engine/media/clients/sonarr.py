@@ -18,6 +18,10 @@ class SonarrClient(ArrClientBase):
         per-season statistics."""
         return await self._get(f"/api/v3/series/{series_id}")
 
+    async def get_library(self) -> list[dict]:
+        """Every series in this instance's library, with authoritative statistics."""
+        return await self._get("/api/v3/series")
+
     async def get_episodes(self, series_id: int) -> list[EpisodeDetail]:
         """Full episode list for a series already in this instance's library."""
         items = await self._get("/api/v3/episode", params={"seriesId": series_id})

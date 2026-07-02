@@ -58,21 +58,23 @@ def _tv_config() -> MediaConfig:
 
 
 def test_merge_lookups_by_tvdb_id():
-    # Same show on both instances: present+complete on a, absent from b's library
-    item_present = {
+    # Lookup hit (may lack presence detail) and the authoritative library record
+    lookup_item = {"title": "Severance", "year": 2022, "tvdbId": 371980}
+    library_record = {
         "title": "Severance",
-        "year": 2022,
         "tvdbId": 371980,
         "id": 42,
         "monitored": True,
         "statistics": {"episodeCount": 19, "episodeFileCount": 19},
     }
-    item_absent = {"title": "Severance", "year": 2022, "tvdbId": 371980}
     # Similarly-named different show, only in b's search results
     other_show = {"title": "Severance Package", "year": 2010, "tvdbId": 99999}
 
     merged = merge_lookups(
-        {"sonarr-a": [item_present], "sonarr-b": [item_absent, other_show]},
+        {
+            "sonarr-a": {"results": [lookup_item], "library": {371980: library_record}},
+            "sonarr-b": {"results": [lookup_item, other_show], "library": {}},
+        },
         MediaType.TV,
         _tv_config(),
     )
@@ -89,7 +91,10 @@ def test_merge_lookups_by_tvdb_id():
 def test_merge_lookups_marks_unreachable_instance():
     item = {"title": "Severance", "year": 2022, "tvdbId": 371980}
     merged = merge_lookups(
-        {"sonarr-a": [item], "sonarr-b": ConnectionError("boom")},
+        {
+            "sonarr-a": {"results": [item], "library": {}},
+            "sonarr-b": ConnectionError("boom"),
+        },
         MediaType.TV,
         _tv_config(),
     )
@@ -97,6 +102,29 @@ def test_merge_lookups_marks_unreachable_instance():
     status_b = merged[0].status_for("sonarr-b")
     assert status_b.state == PresenceState.UNREACHABLE
     assert "boom" in status_b.error
+
+
+def test_merge_movie_status_comes_from_library_not_lookup():
+    """Radarr lookup leaves hasFile empty even for downloaded movies — the
+    library record must win, or every downloaded movie renders as partial."""
+    config = MediaConfig(radarr=[ArrInstance(name="radarr-a", base_url="http://a", api_key="k")])
+    lookup_item = {"title": "Dune: Part Two", "year": 2024, "tmdbId": 693134, "id": 1828, "hasFile": None}
+    library_record = {"id": 1828, "tmdbId": 693134, "hasFile": True, "monitored": True}
+
+    merged = merge_lookups(
+        {"radarr-a": {"results": [lookup_item], "library": {693134: library_record}}},
+        MediaType.MOVIE,
+        config,
+    )
+    assert merged[0].status_for("radarr-a").state == PresenceState.MONITORED_COMPLETE
+
+    # and a movie in nobody's library is simply not present
+    merged = merge_lookups(
+        {"radarr-a": {"results": [lookup_item], "library": {}}},
+        MediaType.MOVIE,
+        config,
+    )
+    assert merged[0].status_for("radarr-a").state == PresenceState.NOT_PRESENT
 
 
 def test_sonarr_status_missing_episodes():
