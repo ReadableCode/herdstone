@@ -118,8 +118,16 @@ def test_sonarr_status_extracts_seasons():
             "statistics": {"episodeCount": 10, "episodeFileCount": 10},
             "seasons": [
                 {"seasonNumber": 0, "monitored": False, "statistics": {"episodeFileCount": 0, "episodeCount": 3}},
-                {"seasonNumber": 1, "monitored": True, "statistics": {"episodeFileCount": 10, "episodeCount": 10}},
-                {"seasonNumber": 2, "monitored": False, "statistics": {"episodeFileCount": 0, "episodeCount": 22}},
+                {
+                    "seasonNumber": 1,
+                    "monitored": True,
+                    "statistics": {"episodeFileCount": 10, "episodeCount": 10, "totalEpisodeCount": 10},
+                },
+                {
+                    "seasonNumber": 2,
+                    "monitored": False,
+                    "statistics": {"episodeFileCount": 0, "episodeCount": 0, "totalEpisodeCount": 22},
+                },
             ],
         }
     )
@@ -128,6 +136,15 @@ def test_sonarr_status_extracts_seasons():
     assert s1.monitored and s1.episode_file_count == 10 and s1.episode_count == 10
     s2 = next(s for s in status.seasons if s.season_number == 2)
     assert not s2.monitored and s2.episode_file_count == 0
+    # unmonitored seasons report 0 monitored eps but keep the real total
+    assert s2.total_episode_count == 22
+
+
+def test_sonarr_status_nothing_monitored_is_not_complete():
+    client = SonarrClient(ArrInstance(name="sonarr-a", base_url="http://a", api_key="k"))
+    status = client.to_status({"id": 7, "monitored": False, "statistics": {"episodeCount": 0, "episodeFileCount": 0}})
+    assert status.state == PresenceState.MONITORED_INCOMPLETE
+    assert status.total_episode_count == 0
 
 
 def test_sonarr_search_result_metadata():

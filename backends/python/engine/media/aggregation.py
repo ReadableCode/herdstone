@@ -131,6 +131,48 @@ async def refresh_status(
     return aggregated
 
 
+async def enrich_tv_statuses(
+    aggregated: AggregatedResult,
+    config: MediaConfig | None = None,
+) -> AggregatedResult:
+    """Replace lookup-derived statuses with authoritative per-series data.
+
+    Sonarr lookup responses often omit episode/season statistics for library
+    entries; /api/v3/series/{id} always has them. Only touches instances that
+    have the series; failures keep the lookup-derived status.
+    """
+    if config is None:
+        config = load_media_config()
+    if aggregated.result.media_type != MediaType.TV:
+        return aggregated
+
+    targets = [
+        (instance, status)
+        for instance in config.sonarr
+        for status in [aggregated.status_for(instance.name)]
+        if status is not None and status.series_id
+    ]
+    if not targets:
+        return aggregated
+
+    async def _refetch(instance: ArrInstance, status: InstanceStatus) -> InstanceStatus:
+        client = SonarrClient(instance)
+        try:
+            item = await client.get_series(status.series_id)  # type: ignore[arg-type]
+        except Exception:  # noqa: BLE001 — keep the lookup-derived status on failure
+            return status
+        # A response without an id would read as NOT_PRESENT and overwrite a
+        # known-good status — only trust a well-formed series record.
+        if not isinstance(item, dict) or not item.get("id"):
+            return status
+        return client.to_status(item)
+
+    refreshed = await asyncio.gather(*(_refetch(i, s) for i, s in targets))
+    by_name = {s.instance: s for s in refreshed}
+    aggregated.statuses = [by_name.get(s.instance, s) for s in aggregated.statuses]
+    return aggregated
+
+
 async def episodes_everywhere(
     aggregated: AggregatedResult,
     config: MediaConfig | None = None,

@@ -48,7 +48,8 @@ class SeasonDetail(BaseModel):
     season_number: int
     monitored: bool = False
     episode_file_count: int = 0
-    episode_count: int = 0  # aired episodes; 0 for unaired/unmonitored seasons
+    episode_count: int = 0  # monitored + aired episodes (sonarr semantics)
+    total_episode_count: int = 0  # all episodes incl. unmonitored/unaired
 
 
 class EpisodeDetail(BaseModel):

@@ -5,7 +5,13 @@ REST API). Meant to run on an always-on box, bound to the Tailscale interface.
 All business logic lives in engine/media; this file only renders.
 """
 
-from ..media.aggregation import add_to_instance, check_plex_availability, refresh_status, search_everywhere
+from ..media.aggregation import (
+    add_to_instance,
+    check_plex_availability,
+    enrich_tv_statuses,
+    refresh_status,
+    search_everywhere,
+)
 from ..media.config import MediaConfig, load_media_config
 from ..media.models import AggregatedResult, MediaType, PresenceState
 
@@ -112,11 +118,11 @@ def run_web(host: str = "127.0.0.1", port: int = 8787) -> None:
                                 chips = "  ".join(
                                     f"{'✓' if s.monitored else '✗'}"
                                     f"{'SP' if s.season_number == 0 else 'S' + str(s.season_number)}"
-                                    f" {s.episode_file_count}/{s.episode_count}"
+                                    f" {s.episode_file_count}/{s.total_episode_count or s.episode_count}"
                                     for s in sorted(
                                         status.seasons, key=lambda s: (s.season_number == 0, s.season_number)
                                     )
-                                    if s.episode_count or s.monitored
+                                    if s.total_episode_count or s.episode_count or s.monitored
                                 )
                                 if chips:
                                     ui.label(chips).classes("text-xs text-grey pl-4")
@@ -157,6 +163,9 @@ def run_web(host: str = "127.0.0.1", port: int = 8787) -> None:
                 render_plex()
             dialog.open()
 
+            if any(s.series_id for s in aggregated.statuses):
+                await enrich_tv_statuses(aggregated, config)
+                render_statuses()
             if config.plex and not aggregated.plex:
                 await check_plex_availability(aggregated, config)
                 render_plex()

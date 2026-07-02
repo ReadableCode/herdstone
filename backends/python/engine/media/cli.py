@@ -8,6 +8,7 @@ import typer
 from .aggregation import (
     add_to_instance,
     check_plex_availability,
+    enrich_tv_statuses,
     episodes_everywhere,
     search_everywhere,
 )
@@ -39,7 +40,10 @@ def _render_result(aggregated: AggregatedResult) -> None:
         glyph = STATE_GLYPHS[s.state]
         detail = ""
         if s.state == PresenceState.MONITORED_INCOMPLETE and s.missing_episode_count is not None:
-            detail = f"  missing {s.missing_episode_count}/{s.total_episode_count} episodes"
+            if s.total_episode_count == 0:
+                detail = "  in library, no monitored episodes"
+            else:
+                detail = f"  missing {s.missing_episode_count}/{s.total_episode_count} episodes"
         elif s.state == PresenceState.UNREACHABLE:
             detail = f"  unreachable: {s.error[:60]}"
         typer.echo(f"    {glyph} {s.instance:<20} {s.state.value}{detail}")
@@ -128,6 +132,7 @@ def seasons(
         if not results:
             return None, {}
         target = results[min(index, len(results) - 1)]
+        await enrich_tv_statuses(target, config)
         eps = await episodes_everywhere(target, config) if episodes else {}
         return target, eps
 
@@ -163,7 +168,8 @@ def seasons(
         eps = eps_by_instance.get(status.instance, [])
         for season in sorted(status.seasons, key=lambda s: (s.season_number == 0, s.season_number)):
             mon = "monitored  " if season.monitored else "unmonitored"
-            counts = f"{season.episode_file_count}/{season.episode_count}" if season.episode_count else "—"
+            denominator = season.total_episode_count or season.episode_count
+            counts = f"{season.episode_file_count}/{denominator}" if denominator else "—"
             typer.echo(f"      {_season_label(season.season_number):<9} {mon} {counts:>7}")
             if episodes:
                 for ep in (e for e in eps if e.season_number == season.season_number):

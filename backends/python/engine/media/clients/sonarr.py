@@ -13,6 +13,11 @@ class SonarrClient(ArrClientBase):
     async def lookup_by_tvdb(self, tvdb_id: int) -> list[dict]:
         return await self.lookup(f"tvdb:{tvdb_id}")
 
+    async def get_series(self, series_id: int) -> dict:
+        """Authoritative series record — unlike lookup, this includes full
+        per-season statistics."""
+        return await self._get(f"/api/v3/series/{series_id}")
+
     async def get_episodes(self, series_id: int) -> list[EpisodeDetail]:
         """Full episode list for a series already in this instance's library."""
         items = await self._get("/api/v3/episode", params={"seriesId": series_id})
@@ -68,13 +73,19 @@ class SonarrClient(ArrClientBase):
         total = stats.get("episodeCount", 0)
         files = stats.get("episodeFileCount", 0)
         missing = max(total - files, 0)
-        state = PresenceState.MONITORED_COMPLETE if missing == 0 else PresenceState.MONITORED_INCOMPLETE
+        if total == 0 and files == 0:
+            # In the library but nothing monitored/downloaded — calling that
+            # "complete" misleads; surface it as incomplete instead.
+            state = PresenceState.MONITORED_INCOMPLETE
+        else:
+            state = PresenceState.MONITORED_COMPLETE if missing == 0 else PresenceState.MONITORED_INCOMPLETE
         seasons = [
             SeasonDetail(
                 season_number=s.get("seasonNumber", 0),
                 monitored=s.get("monitored", False),
                 episode_file_count=s.get("statistics", {}).get("episodeFileCount", 0),
                 episode_count=s.get("statistics", {}).get("episodeCount", 0),
+                total_episode_count=s.get("statistics", {}).get("totalEpisodeCount", 0),
             )
             for s in item.get("seasons", [])
         ]

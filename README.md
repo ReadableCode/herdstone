@@ -102,6 +102,7 @@ herdstone import-ansible ~/GitHub/dotfiles/inventory/hosts -o hosts.json
 | `herdstone import-ansible {path}` | Convert an Ansible INI inventory to hosts.json |
 | `herdstone media instances` | Show configured Sonarr/Radarr/Plex instances |
 | `herdstone media search "title" [-t tv\|movie] [--plex]` | Search every instance, one merged status view |
+| `herdstone media seasons "title" [--episodes]` | Per-season (and per-episode) monitored/on-disk breakdown |
 | `herdstone media add "title" --to {instance}` | Add the top result to a chosen instance |
 | `herdstone tui` | Launch the media remote TUI (Textual) |
 | `herdstone web [--host IP] [--port 8787]` | Launch the media remote web UI (NiceGUI) |

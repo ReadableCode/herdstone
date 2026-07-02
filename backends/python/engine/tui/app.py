@@ -9,7 +9,12 @@ from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widgets import Button, DataTable, Footer, Header, Input, Static
 
-from ..media.aggregation import add_to_instance, check_plex_availability, search_everywhere
+from ..media.aggregation import (
+    add_to_instance,
+    check_plex_availability,
+    enrich_tv_statuses,
+    search_everywhere,
+)
 from ..media.config import load_media_config
 from ..media.models import AggregatedResult, MediaType, PresenceState
 
@@ -149,7 +154,15 @@ class MediaRemote(App):
             return
         aggregated = self.results[event.row_key.value]
         self._render_detail(aggregated)
+        self.enrich_detail(aggregated)
         self.check_plex(aggregated)
+
+    @work(exclusive=True, group="enrich")
+    async def enrich_detail(self, aggregated: AggregatedResult) -> None:
+        """Lookup responses lack per-season statistics — refetch the real series records."""
+        if any(s.series_id for s in aggregated.statuses):
+            await enrich_tv_statuses(aggregated, self.config)
+            self._render_detail(aggregated)
 
     @work(exclusive=True, group="plex")
     async def check_plex(self, aggregated: AggregatedResult) -> None:
@@ -185,7 +198,8 @@ class MediaRemote(App):
             for season in sorted(status.seasons, key=lambda s: (s.season_number == 0, s.season_number)):
                 label = "SP" if season.season_number == 0 else f"S{season.season_number}"
                 mark = "[green]✓[/]" if season.monitored else "[dim]✗[/]"
-                counts = f"{season.episode_file_count}/{season.episode_count}" if season.episode_count else "—"
+                denominator = season.total_episode_count or season.episode_count
+                counts = f"{season.episode_file_count}/{denominator}" if denominator else "—"
                 lines.append(f"    {mark} {label:<4} {counts}")
         if aggregated.plex:
             lines.append("")

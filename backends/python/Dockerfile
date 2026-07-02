@@ -24,4 +24,6 @@ EXPOSE 8787
 
 # Inventory path comes from HERDSTONE_HOSTS (compose mounts hosts.json at
 # /config/hosts.json); API keys/tokens come from the container environment.
-CMD ["uv", "run", "herdstone", "web", "--host", "0.0.0.0", "--port", "8787"]
+# Run the venv entry point directly — `uv run` would re-sync (incl. dev deps)
+# on every container start.
+CMD ["/app/.venv/bin/herdstone", "web", "--host", "0.0.0.0", "--port", "8787"]
