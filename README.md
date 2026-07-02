@@ -38,7 +38,8 @@ herdstone/
 ├── .env.example              # API key placeholders
 └── README.md
 
-../dotfiles/inventory/hosts.json   # THE inventory — machines + services they offer
+../personal_credentials/hosts.json   # THE inventory — machines + services they offer
+../personal_credentials/personal.env # API keys/tokens referenced by hosts.json
 ```
 
 ---
@@ -75,9 +76,10 @@ Optional service fields: `scheme` (default `http`), `base_url` (full override),
 `quality_profile` and `root_folder` (preferred add-time defaults; first
 available on the server otherwise).
 
-Search order: `$HERDSTONE_HOSTS` → `../dotfiles/inventory/hosts.json` (canonical,
-lives next to the Ansible INI it was converted from) → repo-root `hosts.json` →
-`~/.config/herdstone/hosts.json` → `~/herdstone_hosts.json`.
+Search order: `$HERDSTONE_HOSTS` → `../personal_credentials/hosts.json`
+(canonical — it carries internal IPs/usernames, so it lives in the private
+credentials repo) → repo-root `hosts.json` → `~/.config/herdstone/hosts.json` →
+`~/herdstone_hosts.json`.
 
 Secrets never live in the inventory — each service names the env var
 (`api_key_env`) that holds its key/token. `.env` in this repo is a gitignored
@@ -85,7 +87,7 @@ symlink to `../personal_credentials/personal.env` (see `.env.example` for the
 expected keys). Migrating from an Ansible INI inventory:
 
 ```bash
-herdstone import-ansible ~/GitHub/dotfiles/inventory/hosts -o hosts.json
+herdstone import-ansible ~/GitHub/dotfiles/inventory/hosts -o ../personal_credentials/hosts.json
 ```
 
 ---

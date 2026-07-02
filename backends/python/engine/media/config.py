@@ -53,6 +53,9 @@ def load_media_config(machines: list[Machine] | None = None) -> MediaConfig:
 
             base_url = svc.base_url or f"{svc.scheme}://{machine.hostname}:{svc.port}"
             key = os.environ.get(svc.api_key_env, "") if svc.api_key_env else ""
+            # docker-compose v1 env_file passes values literally, so KEY="abc"
+            # arrives with the quotes attached — strip them.
+            key = key.strip().strip('"').strip("'")
             if not key:
                 config.warnings.append(
                     f"{svc.name}: env var {svc.api_key_env or '(none set in hosts.json)'} is empty — skipping"

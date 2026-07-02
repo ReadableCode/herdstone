@@ -11,10 +11,10 @@ except IndexError:
     REPO_ROOT = Path(__file__).resolve().parents[1]
 
 # Inventory search path — first match wins. HERDSTONE_HOSTS env var overrides.
-# Canonical copy lives in the dotfiles repo (assumed checked out beside this one),
-# next to the Ansible INI it was converted from.
+# Canonical copy lives in the personal_credentials repo (assumed checked out
+# beside this one), same place the .env symlink points.
 INVENTORY_SEARCH_PATH = [
-    REPO_ROOT.parent / "dotfiles" / "inventory" / "hosts.json",
+    REPO_ROOT.parent / "personal_credentials" / "hosts.json",
     REPO_ROOT / "hosts.json",
     Path.home() / ".config" / "herdstone" / "hosts.json",
     Path.home() / "herdstone_hosts.json",

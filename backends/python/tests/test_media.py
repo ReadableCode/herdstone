@@ -20,7 +20,8 @@ def _machine_with_services() -> Machine:
 
 
 def test_load_media_config_from_services(monkeypatch):
-    monkeypatch.setenv("TEST_SONARR_KEY", "abc")
+    # quoted value mimics docker-compose v1 env_file, which keeps quotes literally
+    monkeypatch.setenv("TEST_SONARR_KEY", '"abc"')
     monkeypatch.setenv("TEST_RADARR_KEY", "def")
     monkeypatch.setenv("TEST_PLEX_TOKEN", "ghi")
 
