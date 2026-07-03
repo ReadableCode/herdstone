@@ -2,7 +2,10 @@
 
 Single process, server-rendered, calls core functions in-process (no internal
 REST API). Meant to run on an always-on box, bound to the Tailscale interface.
-All business logic lives in engine/media; this file only renders.
+All business logic lives in engine/media; this file only renders. Styling
+follows the readablecode "terminal navy" design system (dotfiles
+design/STYLE.md) — tokens live in _TOKENS_CSS, Quasar brand colors are mapped
+onto them in index().
 """
 
 from ..media.aggregation import (
@@ -16,11 +19,107 @@ from ..media.config import MediaConfig, load_media_config
 from ..media.models import AggregatedResult, MediaType, PresenceState
 
 STATE_BADGE = {
-    PresenceState.MONITORED_COMPLETE: ("● complete", "green"),
-    PresenceState.MONITORED_INCOMPLETE: ("◐ partial", "orange"),
-    PresenceState.NOT_PRESENT: ("○ not present", "grey"),
-    PresenceState.UNREACHABLE: ("✗ unreachable", "red"),
+    PresenceState.MONITORED_COMPLETE: ("● complete", "state-complete"),
+    PresenceState.MONITORED_INCOMPLETE: ("◐ partial", "state-partial"),
+    PresenceState.NOT_PRESENT: ("○ not present", "state-absent"),
+    PresenceState.UNREACHABLE: ("✗ unreachable", "state-error"),
 }
+
+# readablecode "terminal navy" tokens (dotfiles design/tokens.css) plus the
+# Quasar overrides that map the existing markup onto them. This block is the
+# whole theme — don't add hex values elsewhere.
+#
+# NiceGUI loads Quasar's CSS into cascade layers, so layered !important
+# utility classes (text-white, bg-green, text-grey, ...) beat anything we
+# write here, even with !important. These rules therefore stay unlayered and
+# normal (they win over Quasar's layered normal declarations), and the markup
+# avoids Quasar color utilities in favor of the state-*/muted classes below.
+_TOKENS_CSS = """
+:root {
+  --bg: #0d1420;
+  --surface: #121b2a;
+  --surface-2: #182333;
+  --border: rgba(148, 163, 184, 0.16);
+  --ink: #dbe4f0;
+  --ink-2: #9fb0c3;
+  --muted: #7d8b9e;
+  --green: #2ea043;
+  --green-bright: #56d364;
+  --amber: #b8860b;
+  --amber-bright: #e3b341;
+  --dot-red: #f87171;
+  --radius: 8px;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas,
+    monospace;
+}
+
+body, body.body--dark {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-mono);
+}
+.q-field__native, .q-field__input, .q-btn, .q-badge, .q-toggle,
+.q-notification, .q-tooltip {
+  font-family: var(--font-mono);
+}
+
+/* cards as stat pills: surface, hairline border, 8px radius, no shadows */
+.q-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: none;
+  color: var(--ink);
+}
+
+/* badges: quiet pills, state carried by text color */
+.q-badge {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--ink-2);
+}
+
+/* semantic state / text colors (replace Quasar text-* utilities) */
+.muted { color: var(--muted); }
+.state-complete { color: var(--green-bright); }
+.state-partial { color: var(--amber-bright); }
+.state-absent { color: var(--muted); }
+.state-error { color: var(--dot-red); }
+
+.q-btn {
+  border-radius: var(--radius);
+  box-shadow: none;
+  text-transform: none;
+}
+.q-btn.bg-positive { font-weight: 700; }
+.q-btn-group { border: 1px solid var(--border); box-shadow: none; }
+
+.q-field--outlined .q-field__control {
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.q-field--outlined .q-field__control:before { border: 1px solid var(--border); }
+.q-field--outlined.q-field--focused .q-field__control:after {
+  border-color: var(--green);
+  border-width: 1px;
+}
+.q-field__native { color: var(--ink); }
+.q-field__native::placeholder { color: var(--muted); }
+
+.q-notification { border-radius: var(--radius); }
+
+/* signature pieces: ❯ brand, // section headers */
+.brand-prompt { color: var(--green-bright); }
+.section-h {
+  width: 100%;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 2px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.section-h .sh-slash { color: var(--green-bright); }
+"""
 
 
 def _badge(status) -> tuple[str, str]:
@@ -43,7 +142,22 @@ def run_web(host: str = "127.0.0.1", port: int = 8787) -> None:
 
     @ui.page("/")
     def index() -> None:  # noqa: C901 — page builder wires the whole UI
+        ui.colors(
+            primary="#2ea043",
+            secondary="#182333",
+            accent="#56d364",
+            dark="#121b2a",
+            dark_page="#0d1420",
+            positive="#2ea043",
+            negative="#f87171",
+            info="#9fb0c3",
+            warning="#e3b341",
+        )
+        ui.add_css(_TOKENS_CSS)
         state: dict = {"media_type": MediaType.TV}
+
+        def _section(title: str) -> None:
+            ui.html(f'<span class="sh-slash">//</span> {title}').classes("section-h")
 
         async def do_search() -> None:
             query = (search_box.value or "").strip()
@@ -60,7 +174,9 @@ def run_web(host: str = "127.0.0.1", port: int = 8787) -> None:
             results_area.clear()
             with results_area:
                 if not results:
-                    ui.label("No results.").classes("text-grey")
+                    ui.label("no results.").classes("muted")
+                else:
+                    _section("results")
                 for aggregated in results:
                     _result_card(aggregated)
 
@@ -79,8 +195,8 @@ def run_web(host: str = "127.0.0.1", port: int = 8787) -> None:
                         ui.label(f"{r.title}{year}").classes("text-lg font-bold")
                         with ui.row().classes("gap-1"):
                             for status in aggregated.statuses:
-                                label, color = _badge(status)
-                                ui.badge(f"{_short(status.instance)} {label}", color=color)
+                                label, state_class = _badge(status)
+                                ui.badge(f"{_short(status.instance)} {label}", color=None).classes(state_class)
 
         async def open_detail(aggregated: AggregatedResult) -> None:
             with ui.dialog() as dialog, ui.card().classes("w-full max-w-md"):
@@ -102,9 +218,9 @@ def run_web(host: str = "127.0.0.1", port: int = 8787) -> None:
                             if x
                         )
                         if meta:
-                            ui.label(meta).classes("text-xs text-grey")
+                            ui.label(meta).classes("text-xs muted")
                         if r.overview:
-                            ui.label(r.overview[:300]).classes("text-sm text-grey")
+                            ui.label(r.overview[:300]).classes("text-sm muted")
 
                 status_area = ui.column().classes("w-full gap-1")
                 plex_area = ui.column().classes("w-full gap-1")
@@ -113,15 +229,16 @@ def run_web(host: str = "127.0.0.1", port: int = 8787) -> None:
                 def render_statuses() -> None:
                     status_area.clear()
                     with status_area:
+                        _section("instances")
                         for status in aggregated.statuses:
-                            label, color = _badge(status)
+                            label, state_class = _badge(status)
                             line = f"{status.instance}: {label}"
                             if (
                                 status.state == PresenceState.MONITORED_INCOMPLETE
                                 and status.missing_episode_count is not None
                             ):
                                 line += f" — missing {status.missing_episode_count}/{status.total_episode_count} eps"
-                            ui.label(line).classes(f"text-{color}")
+                            ui.label(line).classes(state_class)
                             if status.seasons:
                                 chips = "  ".join(
                                     f"{'✓' if s.monitored else '✗'}"
@@ -133,27 +250,29 @@ def run_web(host: str = "127.0.0.1", port: int = 8787) -> None:
                                     if s.total_episode_count or s.episode_count or s.monitored
                                 )
                                 if chips:
-                                    ui.label(chips).classes("text-xs text-grey pl-4")
+                                    ui.label(chips).classes("text-xs muted pl-4")
 
                     action_area.clear()
                     with action_area:
                         for status in aggregated.statuses:
                             if status.state == PresenceState.NOT_PRESENT:
                                 ui.button(
-                                    f"Add to {status.instance}",
+                                    f"add to {status.instance}",
                                     on_click=lambda s=status: do_add(s.instance),
-                                ).classes("w-full").props("size=lg color=positive")
+                                ).classes("w-full").props("size=lg color=positive text-color=dark")
 
                 def render_plex() -> None:
                     plex_area.clear()
                     with plex_area:
+                        if aggregated.plex:
+                            _section("plex")
                         for plex in aggregated.plex:
                             if plex.available:
-                                ui.label(f"▶ {plex.server}: watch-ready").classes("text-green font-bold")
+                                ui.label(f"▶ {plex.server}: watch-ready").classes("state-complete font-bold")
                             elif plex.error:
-                                ui.label(f"✗ {plex.server}: unreachable").classes("text-red")
+                                ui.label(f"✗ {plex.server}: unreachable").classes("state-error")
                             else:
-                                ui.label(f"· {plex.server}: not in library").classes("text-grey")
+                                ui.label(f"· {plex.server}: not in library").classes("state-absent")
 
                 async def do_add(instance_name: str) -> None:
                     add_result = await add_to_instance(aggregated, instance_name, config)
@@ -185,14 +304,14 @@ def run_web(host: str = "127.0.0.1", port: int = 8787) -> None:
         # --- page layout ---
         with ui.column().classes("w-full max-w-2xl mx-auto p-4 gap-3"):
             with ui.row().classes("items-center w-full no-wrap gap-3"):
-                ui.label("Herdstone Media").classes("text-2xl font-bold grow")
+                ui.html('<span class="brand-prompt">❯</span> herdstone media').classes("text-2xl font-bold grow")
                 ui.toggle(
-                    {MediaType.TV: "TV", MediaType.MOVIE: "Movies"},
+                    {MediaType.TV: "tv", MediaType.MOVIE: "movies"},
                     value=MediaType.TV,
                     on_change=on_toggle,
-                ).props("no-caps")
+                ).props("no-caps toggle-text-color=dark")
             search_box = (
-                ui.input(placeholder="Search…", on_change=do_search)
+                ui.input(placeholder="search…", on_change=do_search)
                 .props('debounce=500 clearable outlined input-class="text-lg"')
                 .classes("w-full")
             )
@@ -204,4 +323,4 @@ def run_web(host: str = "127.0.0.1", port: int = 8787) -> None:
                 ui.notify(warning, color="warning", position="top")
 
     print(f"Herdstone Media web UI on http://{host}:{port}  (bind your Tailscale IP with --host to share)")
-    ui.run(host=host, port=port, title="Herdstone Media", dark=True, reload=False, show=False)
+    ui.run(host=host, port=port, title="❯ herdstone media", dark=True, reload=False, show=False)

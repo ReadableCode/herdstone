@@ -15,14 +15,6 @@ app.add_typer(media_app)
 
 
 @app.command()
-def tui():
-    """Launch the media remote TUI (Textual)."""
-    from .tui.app import run_tui
-
-    run_tui()
-
-
-@app.command()
 def web(
     host: str = typer.Option("127.0.0.1", "--host", help="Interface to bind (use your Tailscale IP to share)"),
     port: int = typer.Option(8787, "--port", help="Port to listen on"),

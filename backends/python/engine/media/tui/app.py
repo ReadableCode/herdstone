@@ -1,28 +1,71 @@
 """Media remote TUI — a thin Textual layer over engine.media.
 
 All business logic lives in engine/media; this file only renders and wires
-user actions to core functions.
+user actions to core functions. Styling follows the readablecode
+"terminal navy" design system (dotfiles design/STYLE.md).
 """
 
 from textual import on, work
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.theme import Theme
 from textual.widgets import Button, DataTable, Footer, Header, Input, Static
 
-from ..media.aggregation import (
+from ..aggregation import (
     add_to_instance,
     check_plex_availability,
     enrich_tv_statuses,
     search_everywhere,
 )
-from ..media.config import load_media_config
-from ..media.models import AggregatedResult, MediaType, PresenceState
+from ..config import load_media_config
+from ..models import AggregatedResult, MediaType, PresenceState
+
+# terminal-navy tokens (dotfiles design/tokens.css)
+BG = "#0d1420"
+SURFACE = "#121b2a"
+SURFACE_2 = "#182333"
+HAIRLINE = "#273141"  # --border rgba(148,163,184,.16) flattened onto --surface
+GRID = "#1c2739"
+INK = "#dbe4f0"
+INK_2 = "#9fb0c3"
+MUTED = "#7d8b9e"
+GREEN = "#2ea043"
+GREEN_BRIGHT = "#56d364"
+AMBER = "#b8860b"
+AMBER_BRIGHT = "#e3b341"
+RED = "#f87171"
+
+TERMINAL_NAVY = Theme(
+    name="terminal-navy",
+    primary=GREEN,
+    secondary=AMBER,
+    accent=GREEN_BRIGHT,
+    warning=AMBER_BRIGHT,
+    error=RED,
+    success=GREEN,
+    foreground=INK,
+    background=BG,
+    surface=SURFACE,
+    panel=SURFACE_2,
+    dark=True,
+    variables={
+        "border": GREEN,
+        "border-blurred": HAIRLINE,
+        "footer-key-foreground": GREEN_BRIGHT,
+        "block-cursor-foreground": INK,
+        "block-cursor-background": GRID,
+        "block-cursor-blurred-foreground": INK_2,
+        "block-cursor-blurred-background": SURFACE_2,
+        "block-hover-background": SURFACE_2,
+        "input-selection-background": f"{GREEN} 35%",
+    },
+)
 
 STATE_GLYPHS = {
-    PresenceState.MONITORED_COMPLETE: "[green]●[/]",
-    PresenceState.MONITORED_INCOMPLETE: "[yellow]◐[/]",
-    PresenceState.NOT_PRESENT: "[dim]○[/]",
-    PresenceState.UNREACHABLE: "[red]✗[/]",
+    PresenceState.MONITORED_COMPLETE: f"[{GREEN_BRIGHT}]●[/]",
+    PresenceState.MONITORED_INCOMPLETE: f"[{AMBER_BRIGHT}]◐[/]",
+    PresenceState.NOT_PRESENT: f"[{MUTED}]○[/]",
+    PresenceState.UNREACHABLE: f"[{RED}]✗[/]",
 }
 
 STATE_LABELS = {
@@ -36,42 +79,59 @@ STATE_LABELS = {
 class MediaRemote(App):
     """Search once, see status across every instance, add where you choose."""
 
-    TITLE = "Herdstone Media Remote"
+    TITLE = "❯ herdstone media"
 
-    CSS = """
-    #search {
-        dock: top;
+    CSS = f"""
+    Header {{
+        background: $panel;
+        color: $text;
+    }}
+    #search {{
+        /* not docked: docking overlaps the Header, hiding the title bar */
         margin: 0 1;
-    }
-    #body {
+    }}
+    #body {{
         height: 1fr;
-    }
-    #results {
+    }}
+    #results {{
         width: 2fr;
-    }
-    #detail-pane {
+    }}
+    #detail-pane {{
         width: 1fr;
-        border-left: solid $primary;
+        border-left: solid {HAIRLINE};
         padding: 0 1;
-    }
-    #detail {
+        background: $surface;
+    }}
+    #detail {{
         height: auto;
-    }
-    #actions Button {
+    }}
+    #actions Button {{
         width: 100%;
         margin-top: 1;
-    }
+    }}
+    #actions Button.-success {{
+        border: none;
+        background: {GREEN};
+        color: {BG};
+        text-style: bold;
+    }}
+    #actions Button.-success:hover {{
+        background: {GREEN_BRIGHT};
+        color: {BG};
+    }}
     """
 
     BINDINGS = [
-        ("q", "quit", "Quit"),
-        ("t", "toggle_type", "TV/Movie"),
-        ("r", "refresh_selected", "Refresh"),
-        ("escape", "focus_search", "Search"),
+        ("q", "quit", "quit"),
+        ("t", "toggle_type", "tv/movie"),
+        ("r", "refresh_selected", "refresh"),
+        ("escape", "focus_search", "search"),
     ]
 
     def __init__(self) -> None:
         super().__init__()
+        self.register_theme(TERMINAL_NAVY)
+        self.theme = "terminal-navy"
         self.media_type = MediaType.TV
         self.config = load_media_config()
         self.results: dict[str, AggregatedResult] = {}
@@ -79,19 +139,19 @@ class MediaRemote(App):
 
     def compose(self) -> ComposeResult:
         yield Header()
-        yield Input(placeholder="Search shows… (t toggles TV/Movie)", id="search")
+        yield Input(placeholder="search shows… (t toggles tv/movie)", id="search")
         with Horizontal(id="body"):
             yield DataTable(id="results", cursor_type="row")
             with VerticalScroll(id="detail-pane"):
-                yield Static("Type to search.", id="detail")
+                yield Static("type to search.", id="detail")
                 yield Vertical(id="actions")
         yield Footer()
 
     def on_mount(self) -> None:
         self._update_subtitle()
         table = self.query_one(DataTable)
-        table.add_column("Title", key="title", width=40)
-        table.add_column("Year", key="year", width=6)
+        table.add_column("title", key="title", width=40)
+        table.add_column("year", key="year", width=6)
         for instance in self.config.arr_instances(self.media_type.value):
             table.add_column(instance.name, key=instance.name)
         for warning in self.config.warnings:
@@ -100,13 +160,13 @@ class MediaRemote(App):
 
     def _update_subtitle(self) -> None:
         instances = self.config.arr_instances(self.media_type.value)
-        self.sub_title = f"{self.media_type.value.upper()} — {len(instances)} instances, {len(self.config.plex)} plex"
+        self.sub_title = f"{self.media_type.value} — {len(instances)} instances, {len(self.config.plex)} plex"
 
     def _rebuild_columns(self) -> None:
         table = self.query_one(DataTable)
         table.clear(columns=True)
-        table.add_column("Title", key="title", width=40)
-        table.add_column("Year", key="year", width=6)
+        table.add_column("title", key="title", width=40)
+        table.add_column("year", key="year", width=6)
         for instance in self.config.arr_instances(self.media_type.value):
             table.add_column(instance.name, key=instance.name)
 
@@ -144,7 +204,7 @@ class MediaRemote(App):
         if self.results:
             table.focus()
         else:
-            self.query_one("#detail", Static).update("No results.")
+            self.query_one("#detail", Static).update("no results.")
 
     # --- detail / plex ------------------------------------------------------
 
@@ -185,10 +245,11 @@ class MediaRemote(App):
             if x
         )
         if meta:
-            lines.append(f"[dim]{meta}[/]")
+            lines.append(f"[{MUTED}]{meta}[/]")
         if r.genres:
-            lines.append(f"[dim]{', '.join(r.genres[:4])}[/]")
+            lines.append(f"[{MUTED}]{', '.join(r.genres[:4])}[/]")
         lines.append("")
+        lines.append(f"[{GREEN_BRIGHT}]//[/] instances")
         for status in aggregated.statuses:
             glyph = STATE_GLYPHS[status.state]
             label = STATE_LABELS[status.state]
@@ -200,20 +261,21 @@ class MediaRemote(App):
             lines.append(line)
             for season in sorted(status.seasons, key=lambda s: (s.season_number == 0, s.season_number)):
                 label = "SP" if season.season_number == 0 else f"S{season.season_number}"
-                mark = "[green]✓[/]" if season.monitored else "[dim]✗[/]"
+                mark = f"[{GREEN_BRIGHT}]✓[/]" if season.monitored else f"[{MUTED}]✗[/]"
                 denominator = season.total_episode_count or season.episode_count
                 counts = f"{season.episode_file_count}/{denominator}" if denominator else "—"
                 lines.append(f"    {mark} {label:<4} {counts}")
         if aggregated.plex:
             lines.append("")
+            lines.append(f"[{GREEN_BRIGHT}]//[/] plex")
             for plex in aggregated.plex:
-                glyph = "[green]▶[/]" if plex.available else "[dim]·[/]"
+                glyph = f"[{GREEN_BRIGHT}]▶[/]" if plex.available else f"[{MUTED}]·[/]"
                 note = "watch-ready" if plex.available else ("error" if plex.error else "not in Plex")
                 lines.append(f"{glyph} {plex.server}: {note}")
         elif self.config.plex:
-            lines.append("\n[dim]checking plex…[/]")
+            lines.append(f"\n[{MUTED}]checking plex…[/]")
         if r.overview:
-            lines.append(f"\n[dim]{r.overview[:400]}[/]")
+            lines.append(f"\n[{MUTED}]{r.overview[:400]}[/]")
         self.query_one("#detail", Static).update("\n".join(lines))
         self._render_actions(aggregated)
 
@@ -222,7 +284,7 @@ class MediaRemote(App):
         actions.remove_children()
         for status in aggregated.statuses:
             if status.state == PresenceState.NOT_PRESENT:
-                button = Button(f"Add to {status.instance}", variant="success")
+                button = Button(f"add to {status.instance}", variant="success")
                 button.instance_name = status.instance  # type: ignore[attr-defined]
                 button.result_key = aggregated.result.external_key  # type: ignore[attr-defined]
                 actions.mount(button)
@@ -251,7 +313,7 @@ class MediaRemote(App):
         self._update_subtitle()
         self.results = {}
         self._rebuild_columns()
-        self.query_one("#detail", Static).update("Type to search.")
+        self.query_one("#detail", Static).update("type to search.")
         self.query_one("#actions", Vertical).remove_children()
         query = self.query_one(Input).value.strip()
         if len(query) >= 2:
@@ -268,10 +330,10 @@ class MediaRemote(App):
     @work(exclusive=True, group="refresh")
     async def refresh_row(self, aggregated: AggregatedResult) -> None:
         await self._refresh_result(aggregated)
-        self.notify("Refreshed.")
+        self.notify("refreshed.")
 
     async def _refresh_result(self, aggregated: AggregatedResult) -> None:
-        from ..media.aggregation import refresh_status
+        from ..aggregation import refresh_status
 
         updated = await refresh_status(aggregated, self.config, include_plex=bool(self.config.plex))
         key = updated.result.external_key

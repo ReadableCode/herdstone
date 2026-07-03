@@ -29,8 +29,8 @@ herdstone/
 │   │   │   ├── config.py             # builds instance list from hosts.json services + .env
 │   │   │   ├── models.py             # pydantic domain models (AggregatedResult, ...)
 │   │   │   ├── aggregation.py        # search_everywhere, add_to_instance, plex checks
-│   │   │   └── clients/              # httpx async clients: sonarr, radarr, plex
-│   │   ├── tui/app.py            # Textual TUI (couch/SSH use)
+│   │   │   ├── clients/              # httpx async clients: sonarr, radarr, plex
+│   │   │   └── tui/app.py            # Textual TUI (couch/SSH use) — media-only, so it lives under media/
 │   │   └── web/app.py            # NiceGUI web UI (phone use, Tailscale-bound)
 │   └── tests/
 ├── cli/herdstone             # shell wrapper: uv run into backends/python
@@ -106,7 +106,7 @@ herdstone import-ansible ~/GitHub/dotfiles/inventory/hosts -o ../personal_creden
 | `herdstone media search "title" [-t tv\|movie] [--plex]` | Search every instance, one merged status view |
 | `herdstone media seasons "title" [--episodes]` | Per-season (and per-episode) monitored/on-disk breakdown |
 | `herdstone media add "title" --to {instance}` | Add the top result to a chosen instance |
-| `herdstone tui` | Launch the media remote TUI (Textual) |
+| `herdstone media tui` | Launch the media remote TUI (Textual) |
 | `herdstone web [--host IP] [--port 8787]` | Launch the media remote web UI (NiceGUI) |
 
 All data commands support `--json`, which is how native UI shells (SwiftUI
