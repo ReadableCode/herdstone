@@ -1,9 +1,12 @@
 # Herdstone
 
-> A cross-platform machine herd monitor **and household media remote**. See which
-> machines are online, run commands across your herd, and search/add shows and
-> movies across every Sonarr/Radarr/Plex instance you run — from one CLI, TUI,
-> or phone-friendly web UI.
+> A cross-platform machine herd monitor. See which machines are online, check
+> their disks, push SSH keys, and import your Ansible inventory — from one
+> CLI, TUI, or phone-friendly web UI.
+
+Looking for the media remote (Sonarr/Radarr/Plex search/status/add)? It moved
+to the **Sync_Plex** repo along with its design docs — `syncplex media ...`,
+web UI on port 8788.
 
 ---
 
@@ -25,21 +28,16 @@ herdstone/
 │   │   ├── ssh.py                # run commands over SSH (or locally)
 │   │   ├── storage.py            # disk usage (df / PowerShell, OS-aware)
 │   │   ├── cli.py                # Typer entry point (doubles as IPC bridge, --json everywhere)
-│   │   ├── media/                # media remote core (shared by CLI/TUI/web)
-│   │   │   ├── config.py             # builds instance list from hosts.json services + .env
-│   │   │   ├── models.py             # pydantic domain models (AggregatedResult, ...)
-│   │   │   ├── aggregation.py        # search_everywhere, add_to_instance, plex checks
-│   │   │   ├── clients/              # httpx async clients: sonarr, radarr, plex
-│   │   │   └── tui/app.py            # Textual TUI (couch/SSH use) — media-only, so it lives under media/
+│   │   ├── tui/app.py            # Textual TUI (couch/SSH use)
 │   │   └── web/app.py            # NiceGUI web UI (phone use, Tailscale-bound)
 │   └── tests/
 ├── cli/herdstone             # shell wrapper: uv run into backends/python
 ├── .env -> ../personal_credentials/personal.env   # symlink, gitignored
-├── .env.example              # API key placeholders
+├── .env.example              # placeholder file (no keys needed today)
 └── README.md
 
 ../personal_credentials/hosts.json   # THE inventory — machines + services they offer
-../personal_credentials/personal.env # API keys/tokens referenced by hosts.json
+../personal_credentials/personal.env # env vars referenced by hosts.json (if any)
 ```
 
 ---
@@ -47,9 +45,9 @@ herdstone/
 ## Inventory: `hosts.json`
 
 One JSON file is the single source of truth for the herd. Each host declares
-how to reach it (`harness`: `ssh` / `ping` / `none`) and, crucially, **which
-services it offers**. Adding another Sonarr/Radarr/Plex instance is a
-config-only change — no code.
+how to reach it (`harness`: `ssh` / `ping` / `none`) and, optionally, **which
+services it offers**. Adding another instance of anything is a config-only
+change — no code.
 
 ```json
 {
@@ -74,7 +72,8 @@ config-only change — no code.
 
 Optional service fields: `scheme` (default `http`), `base_url` (full override),
 `quality_profile` and `root_folder` (preferred add-time defaults; first
-available on the server otherwise).
+available on the server otherwise). Herdstone itself only displays services;
+consumers like Sync_Plex read the same inventory to talk to them.
 
 Search order: `$HERDSTONE_HOSTS` → `../personal_credentials/hosts.json`
 (canonical — it carries internal IPs/usernames, so it lives in the private
@@ -83,8 +82,8 @@ credentials repo) → repo-root `hosts.json` → `~/.config/herdstone/hosts.json
 
 Secrets never live in the inventory — each service names the env var
 (`api_key_env`) that holds its key/token. `.env` in this repo is a gitignored
-symlink to `../personal_credentials/personal.env` (see `.env.example` for the
-expected keys). Migrating from an Ansible INI inventory:
+symlink to `../personal_credentials/personal.env` (herdstone needs no keys
+today; see `.env.example`). Migrating from an Ansible INI inventory:
 
 ```bash
 herdstone import-ansible ~/GitHub/dotfiles/inventory/hosts -o ../personal_credentials/hosts.json
@@ -102,37 +101,20 @@ herdstone import-ansible ~/GitHub/dotfiles/inventory/hosts -o ../personal_creden
 | `herdstone run ...` | Run a command across the herd *(planned)* |
 | `herdstone push-key {id}` | Push your SSH public key to a machine |
 | `herdstone import-ansible {path}` | Convert an Ansible INI inventory to hosts.json |
-| `herdstone media instances` | Show configured Sonarr/Radarr/Plex instances |
-| `herdstone media search "title" [-t tv\|movie] [--plex]` | Search every instance, one merged status view |
-| `herdstone media seasons "title" [--episodes]` | Per-season (and per-episode) monitored/on-disk breakdown |
-| `herdstone media add "title" --to {instance}` | Add the top result to a chosen instance |
-| `herdstone media tui` | Launch the media remote TUI (Textual) |
-| `herdstone web [--host IP] [--port 8787]` | Launch the media remote web UI (NiceGUI) |
+| `herdstone tui` | Launch the herd monitor TUI (Textual) |
+| `herdstone web [--host IP] [--port 8787]` | Launch the herd monitor web UI (NiceGUI) |
 
 All data commands support `--json`, which is how native UI shells (SwiftUI
 menubar app, etc.) consume the engine as a subprocess.
 
-### Media remote in 30 seconds
-
-```bash
-herdstone media instances     # verify what's configured (keys come from .env)
-herdstone media search "severance" --plex
-#   Severance (2022)  [tvdb:371980]
-#     ● sonarr-behemoth      monitored_complete
-#     ○ sonarr-elitedesk     not_present
-#     ▶ plex-behemoth        watch-ready
-herdstone media add "severance" --to sonarr-elitedesk
-```
-
-Statuses merge by TVDB/TMDB id (never by title string), one instance being
-down degrades to a `✗ unreachable` row instead of breaking the search, and
-Plex rows tell you whether it's actually watch-ready.
-
 ### Web UI deployment
 
-Runs as a single process; bind it to your Tailscale IP on an always-on box so
-phones on the tailnet can reach it. Never expose it publicly — there is no
-auth layer by design (tailnet membership is the auth).
+The web UI shows the herd — one card per host with its connection, groups,
+and services; a "ping all" button that fans out concurrently and lights up
+status dots; tap a host for its disk usage bars. Runs as a single process;
+bind it to your Tailscale IP on an always-on box so phones on the tailnet can
+reach it. Never expose it publicly — there is no auth layer by design
+(tailnet membership is the auth).
 
 ```bash
 herdstone web --host 100.x.x.x --port 8787
@@ -175,15 +157,18 @@ uv run ruff check .
 
 ## Versioned Roadmap
 
-### v1 — Core herd monitor + media remote
+### v1 — Core herd monitor
 
 - [x] JSON inventory (`hosts.json`) with per-host services
 - [x] Ansible INI import
 - [x] Concurrent ping, disk usage, SSH key push, `--json` everywhere
-- [x] Media core: multi-instance Sonarr/Radarr search/status/add, Plex watch-readiness
-- [x] Media TUI (Textual) and mobile web UI (NiceGUI)
+- [x] Herd TUI (Textual) and mobile web UI (NiceGUI)
 - [ ] `herdstone run` command runner (one/group/all)
 - [ ] SwiftUI menubar app (calls CLI as subprocess)
+
+> The media remote (multi-instance Sonarr/Radarr search/status/add, Plex
+> watch-readiness, its TUI and web UI) shipped here in v1 and then migrated
+> to the Sync_Plex repo, where its roadmap continues.
 
 ### v2 — Discovery + Integrations
 
@@ -206,8 +191,7 @@ uv run ruff check .
 | --- | --- | --- |
 | Engine | Python 3.14 + uv | Cross-platform, author's standard |
 | CLI | `typer` | Doubles as IPC bridge via `--json` |
-| HTTP clients | `httpx` (async) | Concurrent fan-out to all instances |
-| Domain models | `pydantic` | Validated media models, clean JSON serialization |
+| SSH key push | `paramiko` | Password-auth key push where ssh-copy-id can't reach |
 | Secrets | `python-dotenv` | `.env`-based keys referenced from hosts.json |
 | TUI | `textual` | Keyboard-driven couch/SSH interface |
 | Web UI | `nicegui` | Server-rendered, calls engine in-process — no hand-built API layer |

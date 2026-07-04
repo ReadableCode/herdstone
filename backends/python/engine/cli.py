@@ -6,12 +6,10 @@ from typing import Optional
 import typer
 
 from .inventory import find_machine, machines_to_json, parse_ansible_ini, parse_inventory
-from .media.cli import media_app
 from .ping import ping_many, ping_one  # noqa: F401
 from .storage import get_storage_many
 
 app = typer.Typer(name="herdstone", help="Herdstone — machine herd monitor")
-app.add_typer(media_app)
 
 
 @app.command()
@@ -19,10 +17,18 @@ def web(
     host: str = typer.Option("127.0.0.1", "--host", help="Interface to bind (use your Tailscale IP to share)"),
     port: int = typer.Option(8787, "--port", help="Port to listen on"),
 ):
-    """Launch the media remote web UI (NiceGUI)."""
+    """Launch the herdstone web UI (NiceGUI)."""
     from .web.app import run_web
 
     run_web(host=host, port=port)
+
+
+@app.command()
+def tui():
+    """Launch the herdstone TUI (Textual)."""
+    from .tui.app import run_tui
+
+    run_tui()
 
 
 def _resolve_targets(

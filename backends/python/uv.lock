@@ -385,12 +385,9 @@ name = "herdstone"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
-    { name = "httpx" },
     { name = "nicegui" },
     { name = "paramiko" },
-    { name = "pydantic" },
     { name = "python-dotenv" },
-    { name = "pyyaml" },
     { name = "textual" },
     { name = "typer" },
 ]
@@ -403,12 +400,9 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "httpx", specifier = ">=0.28.1" },
     { name = "nicegui", specifier = ">=3.14.0" },
     { name = "paramiko", specifier = ">=4.0.0" },
-    { name = "pydantic", specifier = ">=2.13.4" },
     { name = "python-dotenv", specifier = ">=1.2.2" },
-    { name = "pyyaml", specifier = ">=6.0" },
     { name = "textual", specifier = ">=8.2.8" },
     { name = "typer", specifier = ">=0.12" },
 ]

@@ -36,6 +36,27 @@ def _use_inventory(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr("engine.config.INVENTORY_SEARCH_PATH", [_write_test_inventory(tmp_path)])
 
 
+def test_cli_surface():
+    """Media commands moved to Sync_Plex — only herd commands remain."""
+    result = runner.invoke(app, ["--help"])
+    assert result.exit_code == 0
+    assert "media" not in result.output
+    for command in ("hosts", "ping", "storage", "push-key", "import-ansible", "tui", "web"):
+        assert command in result.output
+
+
+def test_tui_app_constructs():
+    from engine.tui.app import HerdMonitor, run_tui  # noqa: F401
+
+    assert HerdMonitor().TITLE == "❯ herdstone"
+
+
+def test_web_app_importable():
+    from engine.web.app import _TOKENS_CSS, run_web  # noqa: F401
+
+    assert "--green-bright" in _TOKENS_CSS
+
+
 def test_hosts(tmp_path, monkeypatch):
     _use_inventory(tmp_path, monkeypatch)
     result = runner.invoke(app, ["hosts"])

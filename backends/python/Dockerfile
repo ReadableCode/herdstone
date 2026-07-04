@@ -6,6 +6,7 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     build-essential \
     curl \
+    iputils-ping \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
@@ -23,7 +24,7 @@ RUN uv sync --frozen --no-dev
 EXPOSE 8787
 
 # Inventory path comes from HERDSTONE_HOSTS (compose mounts hosts.json at
-# /config/hosts.json); API keys/tokens come from the container environment.
-# Run the venv entry point directly — `uv run` would re-sync (incl. dev deps)
-# on every container start.
+# /config/hosts.json); no API keys needed — the herd monitor only pings and
+# SSHes. Run the venv entry point directly — `uv run` would re-sync (incl.
+# dev deps) on every container start.
 CMD ["/app/.venv/bin/herdstone", "web", "--host", "0.0.0.0", "--port", "8787"]
