@@ -1,0 +1,22 @@
+# Herdstone herd-monitor web UI (NiceGUI): hosts/ping/storage. Pulled into
+# Docker/docker_compose_projects.yaml via `include:`; the include entry sets
+# project_directory to this repo's root, so relative paths resolve from here.
+# Pings LAN hosts directly rather than talking to other compose services, so
+# no depends_on. The inventory is mounted read-only from the
+# personal_credentials repo; no API keys needed (media remote lives in
+# Sync_Plex), so no env_file.
+services:
+  herdstone-web:
+    image: herdstone_web_image
+    build:
+      context: ./backends/python
+      dockerfile: Dockerfile
+    container_name: herdstone_web
+    environment:
+      TZ: America/Chicago
+      HERDSTONE_HOSTS: /config/hosts.json
+    volumes:
+      - ../personal_credentials/hosts.json:/config/hosts.json:ro
+    ports:
+      - "8787:8787"
+    restart: unless-stopped
