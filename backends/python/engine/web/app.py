@@ -114,7 +114,8 @@ def _conn_summary(machine: Machine) -> str:
     """Connection summary, same shape as the CLI `hosts` output."""
     if machine.harness == "ssh":
         port_str = f" -p {machine.port}" if machine.port != 22 else ""
-        return f"ssh {machine.user}@{machine.hostname}{port_str}"
+        via = f" (via {machine.jump})" if machine.jump else ""
+        return f"ssh {machine.user}@{machine.hostname}{port_str}{via}"
     return f"{machine.harness}: {machine.hostname}" if machine.harness != "none" else "(no harness)"
 
 

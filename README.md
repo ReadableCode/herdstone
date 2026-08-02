@@ -44,10 +44,16 @@ herdstone/
 
 ## Inventory: `hosts.json`
 
-One JSON file is the single source of truth for the herd. Each host declares
-how to reach it (`harness`: `ssh` / `ping` / `none`) and, optionally, **which
-services it offers**. Adding another instance of anything is a config-only
-change — no code.
+Each host declares how to reach it (`harness`: `ssh` / `ping` / `none`) and,
+optionally, **which services it offers**. Adding another instance of anything
+is a config-only change — no code.
+
+The herd is **multi-context**: every sibling `*_credentials` repo may
+contribute a `<context>_hosts.json` (legacy `hosts.json` accepted), the same
+discovery the status_board repo uses — clone a context's credentials repo and
+its machines join the herd. All discovered inventories merge; the first
+definition of a name wins. The shared discovery/ssh plumbing lives in the
+`readable-utils` package (git-pinned, see `[tool.uv.sources]`).
 
 ```json
 {
@@ -70,15 +76,25 @@ change — no code.
 }
 ```
 
+Optional host fields: `identity_file` (ssh `-i`) and `jump` — the name/alias
+of another inventory host to hop through, injected as `ssh -J user@host:port`
+so the chain lives entirely in the inventory, **deliberately not in any
+machine's `~/.ssh/config`**. The hop is skipped automatically when herdstone
+runs on the jump machine itself, and commands targeting *this* machine run
+locally with no ssh at all.
+
 Optional service fields: `scheme` (default `http`), `base_url` (full override),
 `quality_profile` and `root_folder` (preferred add-time defaults; first
 available on the server otherwise). Herdstone itself only displays services;
 consumers like Sync_Plex read the same inventory to talk to them.
 
-Search order: `$HERDSTONE_HOSTS` → `../personal_credentials/hosts.json`
-(canonical — it carries internal IPs/usernames, so it lives in the private
-credentials repo) → repo-root `hosts.json` → `~/.config/herdstone/hosts.json` →
-`~/herdstone_hosts.json`.
+Search order: `$HERDSTONE_HOSTS` (single file, overrides everything) →
+`../<context>_credentials/<context>_hosts.json` for every sibling credentials
+repo (the personal one is canonical — inventories carry internal
+IPs/usernames, so they live in the private credentials repos) → repo-root
+`hosts.json` → `~/.config/herdstone/hosts.json` → `~/herdstone_hosts.json`.
+Unlike the pre-v1.1 first-match-wins behavior, all existing files load and
+merge.
 
 Secrets never live in the inventory — each service names the env var
 (`api_key_env`) that holds its key/token. `.env` in this repo is a gitignored
@@ -98,6 +114,7 @@ herdstone import-ansible ~/GitHub/dotfiles/inventory/hosts -o ../personal_creden
 | `herdstone hosts` | List all machines (`--json` for machine-readable) |
 | `herdstone ping {id\|--group g\|--all}` | Ping machines concurrently |
 | `herdstone storage {id\|--group g\|--all}` | Disk usage per machine |
+| `herdstone stats {id\|--group g\|--all}` | htop-style disk/cpu/mem meters (Linux hosts, nothing installed remotely) |
 | `herdstone run ...` | Run a command across the herd *(planned)* |
 | `herdstone push-key {id}` | Push your SSH public key to a machine |
 | `herdstone import-ansible {path}` | Convert an Ansible INI inventory to hosts.json |
@@ -152,6 +169,11 @@ uv run ruff check .
 | `http` | Services exposing a `/health` endpoint | v2 |
 | `wol` | Wake sleeping machines on LAN | v2 |
 | `ios` | iOS devices via Shortcuts + iCloud bridge | v3 |
+
+For `ssh` hosts, reachability is ICMP ping **with a TCP fallback to the ssh
+port**: Windows blocks inbound ICMP by default while sshd answers fine, so an
+open ssh port counts as online (the result's command field says which method
+decided).
 
 ---
 

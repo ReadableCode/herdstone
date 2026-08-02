@@ -9,7 +9,13 @@ dependencies = [
     "python-dotenv>=1.2.2",
     "textual>=8.2.8",
     "nicegui>=3.14.0",
+    # Shared inventory/ssh/host-stats plumbing + terminal-navy design tokens.
+    # Resolved from git, pinned to a tag - see [tool.uv.sources] below.
+    "readable-utils>=0.3.0",
 ]
+
+[tool.uv.sources]
+readable-utils = { git = "https://github.com/ReadableCode/readable_utils.git", tag = "v0.3.0" }
 
 [project.scripts]
 herdstone = "engine.cli:app"

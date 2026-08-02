@@ -1,97 +1,47 @@
 import asyncio
-import platform
 import socket
 import time
 from datetime import datetime, timezone
 
+from readable_utils.ssh_tools import build_ssh_argv
+
 from .models import CommandResult, Machine
 
 
-def _is_local(machine: Machine) -> bool:
-    """Check if the target machine is the local host (like ansible_connection=local)."""
-    hostname = machine.hostname
-    if hostname in ("localhost", "127.0.0.1", "::1"):
-        return True
-
-    local_hostname = socket.gethostname().lower()
-    if hostname.lower() == local_hostname:
-        return True
-    # handle FQDN vs short name
-    if hostname.lower().split(".")[0] == local_hostname.split(".")[0]:
-        return True
-
-    # check if hostname resolves to a local address
-    try:
-        target_ips = {addr[4][0] for addr in socket.getaddrinfo(hostname, None)}
-        local_ips = {addr[4][0] for addr in socket.getaddrinfo(socket.gethostname(), None)}
-        local_ips.add("127.0.0.1")
-        local_ips.add("::1")
-        if target_ips & local_ips:
-            return True
-    except socket.gaierror:
-        pass
-
-    return False
+def _machine_record(machine: Machine) -> dict:
+    """A Machine as the inventory-record dict the shared ssh_tools builder takes."""
+    return {
+        "name": machine.name,
+        "hostname": machine.hostname,
+        "user": machine.user,
+        "port": machine.port if machine.port != 22 else None,
+        "identity_file": machine.identity_file,
+        "aliases": machine.aliases,
+    }
 
 
-async def _run_local_command(machine: Machine, command: str, timeout: int = 10) -> CommandResult:
-    """Run a command locally via shell (no SSH)."""
-    start = time.monotonic()
-    shell = "cmd" if platform.system().lower() == "windows" else "sh"
-    flag = "/c" if shell == "cmd" else "-c"
+def command_argv(machine: Machine, command: str) -> list[str]:
+    """The full argv that runs command on machine.
 
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            shell,
-            flag,
-            command,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout_bytes, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-    except asyncio.TimeoutError:
-        proc.kill()
-        await proc.communicate()
-        elapsed_ms = int((time.monotonic() - start) * 1000)
-        return CommandResult(
-            machine_id=machine.id,
-            command=command,
-            stdout="",
-            stderr="Local command timed out",
-            exit_code=-1,
-            duration_ms=elapsed_ms,
-            timestamp=datetime.now(timezone.utc),
-        )
-
-    elapsed_ms = int((time.monotonic() - start) * 1000)
-    return CommandResult(
-        machine_id=machine.id,
-        command=command,
-        stdout=stdout_bytes.decode(errors="replace"),
-        stderr=stderr_bytes.decode(errors="replace"),
-        exit_code=proc.returncode or 0,
-        duration_ms=elapsed_ms,
-        timestamp=datetime.now(timezone.utc),
+    All chain semantics live in readable_utils.ssh_tools (shared with the
+    status_board repo): local execution when the target is this host, the
+    ``-J`` hop through machine.jump_via (skipped when this machine IS the
+    jump host), and identity_file/port handling.
+    """
+    jump = _machine_record(machine.jump_via) if machine.jump_via else None
+    return build_ssh_argv(
+        _machine_record(machine), command, jump=jump, local_hostname=socket.gethostname()
     )
 
 
 async def run_ssh_command(machine: Machine, command: str, timeout: int = 10) -> CommandResult:
     """Run a command on a machine. Uses local exec if target is this host, SSH otherwise."""
-    if _is_local(machine):
-        return await _run_local_command(machine, command, timeout=timeout)
-
+    argv = command_argv(machine, command)
     start = time.monotonic()
-
-    ssh_cmd = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", "-o", "StrictHostKeyChecking=accept-new"]
-    if machine.port != 22:
-        ssh_cmd += ["-p", str(machine.port)]
-    if machine.identity_file:
-        ssh_cmd += ["-i", machine.identity_file]
-    ssh_cmd += [f"{machine.user}@{machine.hostname}", command]
 
     try:
         proc = await asyncio.create_subprocess_exec(
-            *ssh_cmd,
+            *argv,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -104,7 +54,7 @@ async def run_ssh_command(machine: Machine, command: str, timeout: int = 10) -> 
             machine_id=machine.id,
             command=command,
             stdout="",
-            stderr="SSH command timed out",
+            stderr="Command timed out",
             exit_code=-1,
             duration_ms=elapsed_ms,
             timestamp=datetime.now(timezone.utc),

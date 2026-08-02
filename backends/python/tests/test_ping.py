@@ -1,7 +1,60 @@
 import asyncio
+from datetime import datetime, timezone
 
-from engine.models import Machine
+import engine.ping as ping_module
+from engine.models import CommandResult, Machine
 from engine.ping import ping_many, ping_one
+
+
+def _failed_icmp(machine, count, timeout):
+    async def fake():
+        return CommandResult(
+            machine_id=machine.id, command="ping (blocked)", stdout="", stderr="timeout",
+            exit_code=1, duration_ms=1, timestamp=datetime.now(timezone.utc),
+        )
+    return fake()
+
+
+def test_ping_falls_back_to_tcp_when_icmp_blocked(monkeypatch):
+    """Windows blocks ICMP by default - an answering ssh port still means online."""
+    monkeypatch.setattr(ping_module, "_icmp_ping", _failed_icmp)
+
+    async def scenario():
+        server = await asyncio.start_server(lambda r, w: w.close(), "127.0.0.1", 0)
+        port = server.sockets[0].getsockname()[1]
+        machine = Machine(id="winbox", name="winbox", hostname="127.0.0.1", user="me",
+                          port=port, harness="ssh")
+        async with server:
+            return await ping_one(machine)
+
+    result = asyncio.run(scenario())
+    assert result.exit_code == 0
+    assert result.command.startswith("tcp connect")
+
+
+def test_ping_tcp_fallback_offline_when_port_closed(monkeypatch):
+    monkeypatch.setattr(ping_module, "_icmp_ping", _failed_icmp)
+
+    async def scenario():
+        # grab an ephemeral port, then close the server so nothing listens on it
+        server = await asyncio.start_server(lambda r, w: w.close(), "127.0.0.1", 0)
+        port = server.sockets[0].getsockname()[1]
+        server.close()
+        await server.wait_closed()
+        machine = Machine(id="downbox", name="downbox", hostname="127.0.0.1", user="me",
+                          port=port, harness="ssh")
+        return await ping_one(machine)
+
+    result = asyncio.run(scenario())
+    assert result.exit_code != 0
+
+
+def test_ping_no_tcp_fallback_for_non_ssh_harness(monkeypatch):
+    monkeypatch.setattr(ping_module, "_icmp_ping", _failed_icmp)
+    machine = Machine(id="iot", name="iot", hostname="127.0.0.1", user="", harness="ping")
+    result = asyncio.run(ping_one(machine))
+    assert result.exit_code != 0
+    assert result.command == "ping (blocked)"
 
 
 def test_ping_one():

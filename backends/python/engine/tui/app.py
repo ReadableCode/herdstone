@@ -5,64 +5,34 @@ wires user actions to core functions. Styling follows the readablecode
 "terminal navy" design system (dotfiles design/STYLE.md).
 """
 
+from readable_utils.design_tokens import (
+    GREEN_BRIGHT,
+    HAIRLINE,
+    MUTED,
+    RED,
+    terminal_navy_textual_theme,
+)
+from readable_utils.host_stats_tools import stats_renderable
+from rich.console import Group
+from rich.text import Text
 from textual import work
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, VerticalScroll
-from textual.theme import Theme
 from textual.widgets import DataTable, Footer, Header, Static
 
 from ..inventory import parse_inventory
 from ..models import Machine
 from ..ping import ping_many
+from ..stats import get_stats_one
 from ..storage import get_storage_many
-
-# terminal-navy tokens (dotfiles design/tokens.css)
-BG = "#0d1420"
-SURFACE = "#121b2a"
-SURFACE_2 = "#182333"
-HAIRLINE = "#273141"  # --border rgba(148,163,184,.16) flattened onto --surface
-GRID = "#1c2739"
-INK = "#dbe4f0"
-INK_2 = "#9fb0c3"
-MUTED = "#7d8b9e"
-GREEN = "#2ea043"
-GREEN_BRIGHT = "#56d364"
-AMBER = "#b8860b"
-AMBER_BRIGHT = "#e3b341"
-RED = "#f87171"
-
-TERMINAL_NAVY = Theme(
-    name="terminal-navy",
-    primary=GREEN,
-    secondary=AMBER,
-    accent=GREEN_BRIGHT,
-    warning=AMBER_BRIGHT,
-    error=RED,
-    success=GREEN,
-    foreground=INK,
-    background=BG,
-    surface=SURFACE,
-    panel=SURFACE_2,
-    dark=True,
-    variables={
-        "border": GREEN,
-        "border-blurred": HAIRLINE,
-        "footer-key-foreground": GREEN_BRIGHT,
-        "block-cursor-foreground": INK,
-        "block-cursor-background": GRID,
-        "block-cursor-blurred-foreground": INK_2,
-        "block-cursor-blurred-background": SURFACE_2,
-        "block-hover-background": SURFACE_2,
-        "input-selection-background": f"{GREEN} 35%",
-    },
-)
 
 
 def _conn_summary(machine: Machine) -> str:
     """Connection summary, same shape as the CLI `hosts` output."""
     if machine.harness == "ssh":
         port_str = f" -p {machine.port}" if machine.port != 22 else ""
-        return f"ssh {machine.user}@{machine.hostname}{port_str}"
+        via = f" (via {machine.jump})" if machine.jump else ""
+        return f"ssh {machine.user}@{machine.hostname}{port_str}{via}"
     return f"{machine.harness}: {machine.hostname}" if machine.harness != "none" else "(no harness)"
 
 
@@ -117,7 +87,7 @@ class HerdMonitor(App):
 
     def __init__(self) -> None:
         super().__init__()
-        self.register_theme(TERMINAL_NAVY)
+        self.register_theme(terminal_navy_textual_theme())
         self.theme = "terminal-navy"
         self.machines: list[Machine] = []
 
@@ -224,6 +194,12 @@ class HerdMonitor(App):
                 f"{_fmt_bytes(d.used_bytes)} / {_fmt_bytes(d.size_bytes)}"
             )
         panel.update("\n".join(lines))
+
+        # cpu/mem/disk-on-/ meters via the shared @@STATS@@ probe (Linux only)
+        if machine.os != "linux":
+            return
+        stats = await get_stats_one(machine)
+        panel.update(Group(Text.from_markup("\n".join(lines)), Text(), stats_renderable(stats)))
 
 
 def run_tui() -> None:

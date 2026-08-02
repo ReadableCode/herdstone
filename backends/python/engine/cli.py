@@ -7,6 +7,7 @@ import typer
 
 from .inventory import find_machine, machines_to_json, parse_ansible_ini, parse_inventory
 from .ping import ping_many, ping_one  # noqa: F401
+from .stats import get_stats_many
 from .storage import get_storage_many
 
 app = typer.Typer(name="herdstone", help="Herdstone — machine herd monitor")
@@ -96,6 +97,7 @@ def hosts(output_json: bool = typer.Option(False, "--json", help="Output as JSON
                 "harness": m.harness,
                 "groups": m.groups,
                 "aliases": m.aliases,
+                "jump": m.jump,
                 "services": [{"type": s.type, "name": s.name, "port": s.port} for s in m.services],
             }
             for m in machines
@@ -105,7 +107,8 @@ def hosts(output_json: bool = typer.Option(False, "--json", help="Output as JSON
         for m in machines:
             if m.harness == "ssh":
                 port_str = f" -p {m.port}" if m.port != 22 else ""
-                conn = f"ssh {m.user}@{m.hostname}{port_str}"
+                via = f" (via {m.jump})" if m.jump else ""
+                conn = f"ssh {m.user}@{m.hostname}{port_str}{via}"
             else:
                 conn = f"{m.harness}: {m.hostname}" if m.harness != "none" else "(no harness)"
             svc = f"  {{{', '.join(s.name for s in m.services)}}}" if m.services else ""
@@ -218,6 +221,33 @@ def storage(
                     f"{prefix} {d.mount_point:<20} [{bar}] {d.use_percent:5.1f}%  "
                     f"{_fmt_bytes(d.used_bytes)} / {_fmt_bytes(d.size_bytes)}"
                 )
+
+
+@app.command()
+def stats(
+    target: Optional[str] = typer.Argument(None, help="Host alias or name"),
+    group: Optional[str] = typer.Option(None, "--group", "-g", help="Query all machines in a group"),
+    all_hosts: bool = typer.Option(False, "--all", "-a", help="Query all machines"),
+    output_json: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Show disk/cpu/mem meters for one machine, a group, or all machines (Linux hosts only)."""
+    from readable_utils.host_stats_tools import stats_renderable
+    from rich.console import Console
+    from rich.text import Text
+
+    targets = _resolve_targets(target=target, group=group, all_hosts=all_hosts)
+    results = asyncio.run(get_stats_many(targets))
+
+    if output_json:
+        typer.echo(json.dumps(results, indent=2))
+        return
+
+    console = Console()
+    name_map = {m.id: m.name for m in targets}
+    for machine_id, machine_stats in results.items():
+        line = Text(f"  {name_map.get(machine_id, machine_id):<22} ")
+        line.append_text(stats_renderable(machine_stats))
+        console.print(line)
 
 
 def get_local_public_key(key_path: str = ""):

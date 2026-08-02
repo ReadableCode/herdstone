@@ -33,6 +33,8 @@ class Machine:
     aliases: list[str] = field(default_factory=list)
     tags: dict[str, str] = field(default_factory=dict)
     identity_file: str | None = None
+    jump: str = ""  # name/alias of the jump host to hop through (resolved at parse time)
+    jump_via: "Machine | None" = None  # the resolved jump machine, set by parse_inventory
     services: list[Service] = field(default_factory=list)
     status: str = "unknown"
     last_seen: datetime | None = None

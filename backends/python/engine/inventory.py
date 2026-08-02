@@ -2,17 +2,39 @@ import json
 import re
 from pathlib import Path
 
-from .config import get_inventory_path
+from .config import get_inventory_paths
 from .models import Machine, Service
 
 
 def parse_inventory(path: Path | None = None) -> list[Machine]:
-    """Load the hosts.json inventory into a list of Machine objects."""
-    if path is None:
-        path = get_inventory_path()
-    if path is None or not path.is_file():
-        return []
+    """Load the hosts.json inventory/inventories into a list of Machine objects.
 
+    With an explicit path, only that file loads. Otherwise every discovered
+    inventory loads and the herds merge — first definition of a name wins, so
+    the search-path order in config.py is the precedence order. Each
+    machine's ``jump`` token (name/alias of another machine to hop through)
+    is resolved against the merged herd into ``jump_via``.
+    """
+    paths = [path] if path is not None else get_inventory_paths()
+    machines: list[Machine] = []
+    seen_names: set[str] = set()
+    for inventory_path in paths:
+        if not inventory_path.is_file():
+            continue
+        for machine in _parse_file(inventory_path):
+            if machine.name.lower() in seen_names:
+                continue
+            seen_names.add(machine.name.lower())
+            machines.append(machine)
+    for machine in machines:
+        if machine.jump:
+            matches = find_machine(machines, machine.jump)
+            machine.jump_via = matches[0] if matches else None
+    return machines
+
+
+def _parse_file(path: Path) -> list[Machine]:
+    """Parse one hosts.json file into Machine objects (no jump resolution)."""
     data = json.loads(path.read_text())
     machines: list[Machine] = []
 
@@ -48,6 +70,7 @@ def parse_inventory(path: Path | None = None) -> list[Machine]:
                 aliases=list(entry.get("aliases", [])),
                 tags=dict(entry.get("tags", {})),
                 identity_file=entry.get("identity_file"),
+                jump=entry.get("jump", ""),
                 services=services,
             )
         )
@@ -180,6 +203,8 @@ def machines_to_json(machines: list[Machine]) -> str:
             entry["tags"] = m.tags
         if m.identity_file:
             entry["identity_file"] = m.identity_file
+        if m.jump:
+            entry["jump"] = m.jump
         if m.services:
             entry["services"] = [
                 {k: v for k, v in vars(s).items() if v not in ("", None)} for s in m.services
