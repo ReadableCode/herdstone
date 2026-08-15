@@ -1,8 +1,7 @@
 # Herdstone
 
 > A cross-platform machine herd monitor. See which machines are online, check
-> their disks, push SSH keys, and import your Ansible inventory — from one
-> CLI, TUI, or phone-friendly web UI.
+> their disks, and push SSH keys — from one CLI, TUI, or phone-friendly web UI.
 
 Looking for the media remote (Sonarr/Radarr/Plex search/status/add)? It moved
 to the **Sync_Plex** repo along with its design docs — `syncplex media ...`,
@@ -23,7 +22,7 @@ herdstone/
 │   ├── engine/               # The engine package
 │   │   ├── models.py             # Machine, Service, CommandResult dataclasses
 │   │   ├── config.py             # hosts.json search path, .env loading
-│   │   ├── inventory.py          # hosts.json parser + Ansible INI importer
+│   │   ├── inventory.py          # hosts.json parser
 │   │   ├── ping.py               # concurrent ICMP reachability
 │   │   ├── ssh.py                # run commands over SSH (or locally)
 │   │   ├── storage.py            # disk usage (df / PowerShell, OS-aware)
@@ -99,11 +98,7 @@ merge.
 Secrets never live in the inventory — each service names the env var
 (`api_key_env`) that holds its key/token. `.env` in this repo is a gitignored
 symlink to `../personal_credentials/personal.env` (herdstone needs no keys
-today; see `.env.example`). Migrating from an Ansible INI inventory:
-
-```bash
-herdstone import-ansible ~/GitHub/dotfiles/inventory/hosts -o ../personal_credentials/hosts.json
-```
+today; see `.env.example`).
 
 ---
 
@@ -117,7 +112,6 @@ herdstone import-ansible ~/GitHub/dotfiles/inventory/hosts -o ../personal_creden
 | `herdstone stats {id\|--group g\|--all}` | htop-style disk/cpu/mem meters (Linux hosts, nothing installed remotely) |
 | `herdstone run ...` | Run a command across the herd *(planned)* |
 | `herdstone push-key {id}` | Push your SSH public key to a machine |
-| `herdstone import-ansible {path}` | Convert an Ansible INI inventory to hosts.json |
 | `herdstone tui` | Launch the herd monitor TUI (Textual) |
 | `herdstone web [--host IP] [--port 8787]` | Launch the herd monitor web UI (NiceGUI) |
 
@@ -182,7 +176,6 @@ decided).
 ### v1 — Core herd monitor
 
 - [x] JSON inventory (`hosts.json`) with per-host services
-- [x] Ansible INI import
 - [x] Concurrent ping, disk usage, SSH key push, `--json` everywhere
 - [x] Herd TUI (Textual) and mobile web UI (NiceGUI)
 - [ ] `herdstone run` command runner (one/group/all)

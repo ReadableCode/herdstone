@@ -1,8 +1,7 @@
 import json
 from pathlib import Path
-from textwrap import dedent
 
-from engine.inventory import find_machine, machines_to_json, parse_ansible_ini, parse_inventory
+from engine.inventory import find_machine, parse_inventory
 
 
 def _write_hosts_json(tmp_path: Path) -> Path:
@@ -75,53 +74,3 @@ def test_parse_real_inventory():
     by_name = {m.name: m for m in machines}
     assert "behemoth" in by_name
     assert any(s.type == "sonarr" for s in by_name["behemoth"].services)
-
-
-def test_ansible_ini_roundtrip(tmp_path):
-    ini = tmp_path / "hosts"
-    ini.write_text(
-        dedent("""\
-        # comment
-        [macs]
-        MacBookPro12 ansible_user=jason ssh_alias=sshmac
-
-        [macs:vars]
-        ansible_user=jason
-
-        [raspbian]
-        raspberrypi4 ssh_alias=sshpi4
-
-        [raspbian:vars]
-        ansible_user=pi
-
-        [networking]
-        homerouter ansible_host=192.168.86.1
-
-        [game_consoles]
-        Switch
-    """)
-    )
-    machines = parse_ansible_ini(ini)
-    by_name = {m.name: m for m in machines}
-
-    assert by_name["MacBookPro12"].user == "jason"
-    assert by_name["MacBookPro12"].os == "macos"
-    assert by_name["MacBookPro12"].aliases == ["sshmac"]
-    assert by_name["MacBookPro12"].harness == "ssh"
-
-    # group vars supply the user
-    assert by_name["raspberrypi4"].user == "pi"
-    assert by_name["raspberrypi4"].harness == "ssh"
-
-    # no user but explicit IP -> ping
-    assert by_name["homerouter"].harness == "ping"
-    assert by_name["homerouter"].hostname == "192.168.86.1"
-
-    # nothing to connect to -> none
-    assert by_name["Switch"].harness == "none"
-
-    # round-trips through the JSON format
-    out = tmp_path / "hosts.json"
-    out.write_text(machines_to_json(machines))
-    reparsed = parse_inventory(out)
-    assert {m.name for m in reparsed} == {m.name for m in machines}

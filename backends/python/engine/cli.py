@@ -5,7 +5,7 @@ from typing import Optional
 
 import typer
 
-from .inventory import find_machine, machines_to_json, parse_ansible_ini, parse_inventory
+from .inventory import find_machine, parse_inventory
 from .ping import ping_many, ping_one  # noqa: F401
 from .stats import get_stats_many
 from .storage import get_storage_many
@@ -113,30 +113,6 @@ def hosts(output_json: bool = typer.Option(False, "--json", help="Output as JSON
                 conn = f"{m.harness}: {m.hostname}" if m.harness != "none" else "(no harness)"
             svc = f"  {{{', '.join(s.name for s in m.services)}}}" if m.services else ""
             typer.echo(f"  {m.name:<22} {conn:<45} [{', '.join(m.groups)}]{svc}")
-
-
-@app.command("import-ansible")
-def import_ansible(
-    path: str = typer.Argument(..., help="Path to an Ansible INI inventory file"),
-    output: str = typer.Option("hosts.json", "--output", "-o", help="Where to write the JSON inventory"),
-    force: bool = typer.Option(False, "--force", "-f", help="Overwrite the output file if it exists"),
-):
-    """Convert an Ansible INI inventory into a hosts.json inventory."""
-    from pathlib import Path
-
-    src = Path(path).expanduser()
-    if not src.is_file():
-        typer.echo(f"Inventory file not found: {src}")
-        raise typer.Exit(1)
-
-    dest = Path(output).expanduser()
-    if dest.exists() and not force:
-        typer.echo(f"{dest} already exists — use --force to overwrite.")
-        raise typer.Exit(1)
-
-    machines = parse_ansible_ini(src)
-    dest.write_text(machines_to_json(machines) + "\n")
-    typer.echo(f"Wrote {len(machines)} hosts to {dest}")
 
 
 @app.command()

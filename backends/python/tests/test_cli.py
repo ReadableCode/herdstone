@@ -41,7 +41,7 @@ def test_cli_surface():
     result = runner.invoke(app, ["--help"])
     assert result.exit_code == 0
     assert "media" not in result.output
-    for command in ("hosts", "ping", "storage", "push-key", "import-ansible", "tui", "web"):
+    for command in ("hosts", "ping", "storage", "push-key", "tui", "web"):
         assert command in result.output
 
 
@@ -109,14 +109,3 @@ def test_ping_unknown_group(tmp_path, monkeypatch):
     _use_inventory(tmp_path, monkeypatch)
     result = runner.invoke(app, ["ping", "--group", "nonexistent"])
     assert result.exit_code == 1
-
-
-def test_import_ansible(tmp_path, monkeypatch):
-    ini = tmp_path / "ansible_hosts"
-    ini.write_text("[macs]\nMacBookPro12 ansible_user=jason ssh_alias=sshmac\n")
-    out = tmp_path / "converted.json"
-    result = runner.invoke(app, ["import-ansible", str(ini), "-o", str(out)])
-    assert result.exit_code == 0
-    data = json.loads(out.read_text())
-    assert data["hosts"][0]["name"] == "MacBookPro12"
-    assert data["hosts"][0]["aliases"] == ["sshmac"]
