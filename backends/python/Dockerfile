@@ -2,10 +2,16 @@ FROM python:3.14-slim
 
 WORKDIR /app
 
+# git: readable-utils is a git dependency in uv.lock (public GitHub tag), and
+# `uv sync --frozen` clones it at build time. Without git the build dies with
+# "Git executable not found" - which is how every image build on elitedesk had
+# been failing (seen 2026-09-07 in the auto-deploy log) while the old image
+# kept serving.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     build-essential \
     curl \
+    git \
     iputils-ping \
     && rm -rf /var/lib/apt/lists/*
 

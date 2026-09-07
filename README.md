@@ -211,3 +211,11 @@ decided).
 | TUI | `textual` | Keyboard-driven couch/SSH interface |
 | Web UI | `nicegui` | Server-rendered, calls engine in-process — no hand-built API layer |
 | Mac UI (planned) | SwiftUI | Native menubar, App Store compatible |
+
+## Notes
+
+- The arr lookup endpoints do not reliably report whether a title is present;
+  use the library records.
+- NiceGUI 3.x layers Quasar's CSS, so custom `!important` rules lose to
+  utility classes; style through props and semantic classes (dotfiles
+  `docs/howto_nicegui_quasar_layers.md`).
