@@ -16,7 +16,7 @@ services:
       TZ: America/Chicago
       HERDSTONE_HOSTS: /config/hosts.json
     volumes:
-      - ../personal_credentials/hosts.json:/config/hosts.json:ro
+      - ../personal_credentials/personal_hosts.json:/config/hosts.json:ro
     ports:
       - "8787:8787"
     restart: unless-stopped

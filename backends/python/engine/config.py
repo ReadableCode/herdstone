@@ -15,7 +15,7 @@ except IndexError:
 # Inventory search path — EVERY existing file loads and the herds merge
 # (first definition of a name wins), the same multi-context discovery the
 # status_board repo uses: each sibling *_credentials repo contributes its
-# <context>_hosts.json (legacy hosts.json accepted), so cloning a context's
+# <context>_hosts.json, so cloning a context's
 # credentials repo adds its machines to the herd. HERDSTONE_HOSTS overrides
 # everything with a single file.
 INVENTORY_SEARCH_PATH = [

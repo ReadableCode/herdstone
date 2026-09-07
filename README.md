@@ -35,7 +35,7 @@ herdstone/
 ├── .env.example              # placeholder file (no keys needed today)
 └── README.md
 
-../personal_credentials/hosts.json   # THE inventory — machines + services they offer
+../personal_credentials/personal_hosts.json   # THE inventory — machines + services they offer
 ../personal_credentials/personal.env # env vars referenced by hosts.json (if any)
 ```
 
@@ -48,7 +48,7 @@ optionally, **which services it offers**. Adding another instance of anything
 is a config-only change — no code.
 
 The herd is **multi-context**: every sibling `*_credentials` repo may
-contribute a `<context>_hosts.json` (legacy `hosts.json` accepted), the same
+contribute a `<context>_hosts.json`, the same
 discovery the status_board repo uses — clone a context's credentials repo and
 its machines join the herd. All discovered inventories merge; the first
 definition of a name wins. The shared discovery/ssh plumbing lives in the
