@@ -36,7 +36,7 @@ herdstone/
 └── README.md
 
 ../personal_credentials/personal_hosts.json   # THE inventory — machines + services they offer
-../personal_credentials/personal.env # env vars referenced by hosts.json (if any)
+../personal_credentials/personal.env # env vars referenced by personal_hosts.json (if any)
 ```
 
 ---
