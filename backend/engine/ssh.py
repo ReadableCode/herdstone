@@ -29,9 +29,7 @@ def command_argv(machine: Machine, command: str) -> list[str]:
     jump host), and identity_file/port handling.
     """
     jump = _machine_record(machine.jump_via) if machine.jump_via else None
-    return build_ssh_argv(
-        _machine_record(machine), command, jump=jump, local_hostname=socket.gethostname()
-    )
+    return build_ssh_argv(_machine_record(machine), command, jump=jump, local_hostname=socket.gethostname())
 
 
 async def run_ssh_command(machine: Machine, command: str, timeout: int = 10) -> CommandResult:

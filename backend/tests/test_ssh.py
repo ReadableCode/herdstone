@@ -11,10 +11,15 @@ def _write_jump_inventory(tmp_path: Path) -> Path:
         json.dumps(
             {
                 "hosts": [
-                    {"name": "gateway", "hostname": "10.0.0.1", "user": "jgate", "port": 2222,
-                     "aliases": ["sshgate"]},
-                    {"name": "inner-vm", "hostname": "10.0.0.20", "user": "svc", "harness": "ssh",
-                     "jump": "sshgate", "identity_file": "~/.ssh/id_inner"},
+                    {"name": "gateway", "hostname": "10.0.0.1", "user": "jgate", "port": 2222, "aliases": ["sshgate"]},
+                    {
+                        "name": "inner-vm",
+                        "hostname": "10.0.0.20",
+                        "user": "svc",
+                        "harness": "ssh",
+                        "jump": "sshgate",
+                        "identity_file": "~/.ssh/id_inner",
+                    },
                 ]
             }
         )

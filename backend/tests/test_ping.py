@@ -9,9 +9,15 @@ from engine.ping import ping_many, ping_one
 def _failed_icmp(machine, count, timeout):
     async def fake():
         return CommandResult(
-            machine_id=machine.id, command="ping (blocked)", stdout="", stderr="timeout",
-            exit_code=1, duration_ms=1, timestamp=datetime.now(timezone.utc),
+            machine_id=machine.id,
+            command="ping (blocked)",
+            stdout="",
+            stderr="timeout",
+            exit_code=1,
+            duration_ms=1,
+            timestamp=datetime.now(timezone.utc),
         )
+
     return fake()
 
 
@@ -22,8 +28,7 @@ def test_ping_falls_back_to_tcp_when_icmp_blocked(monkeypatch):
     async def scenario():
         server = await asyncio.start_server(lambda r, w: w.close(), "127.0.0.1", 0)
         port = server.sockets[0].getsockname()[1]
-        machine = Machine(id="winbox", name="winbox", hostname="127.0.0.1", user="me",
-                          port=port, harness="ssh")
+        machine = Machine(id="winbox", name="winbox", hostname="127.0.0.1", user="me", port=port, harness="ssh")
         async with server:
             return await ping_one(machine)
 
@@ -41,8 +46,7 @@ def test_ping_tcp_fallback_offline_when_port_closed(monkeypatch):
         port = server.sockets[0].getsockname()[1]
         server.close()
         await server.wait_closed()
-        machine = Machine(id="downbox", name="downbox", hostname="127.0.0.1", user="me",
-                          port=port, harness="ssh")
+        machine = Machine(id="downbox", name="downbox", hostname="127.0.0.1", user="me", port=port, harness="ssh")
         return await ping_one(machine)
 
     result = asyncio.run(scenario())

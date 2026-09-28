@@ -50,9 +50,7 @@ async def _tcp_probe(machine: Machine, timeout: int) -> CommandResult:
     start = time.monotonic()
     command = f"tcp connect {machine.hostname}:{machine.port}"
     try:
-        _, writer = await asyncio.wait_for(
-            asyncio.open_connection(machine.hostname, machine.port), timeout=timeout
-        )
+        _, writer = await asyncio.wait_for(asyncio.open_connection(machine.hostname, machine.port), timeout=timeout)
         writer.close()
         try:
             await writer.wait_closed()
@@ -85,9 +83,7 @@ async def ping_one(machine: Machine, count: int = 1, timeout: int = 2) -> Comman
     return await _tcp_probe(machine, timeout)
 
 
-async def ping_many(
-    machines: list[Machine], count: int = 1, timeout: int = 2
-) -> list[CommandResult]:
+async def ping_many(machines: list[Machine], count: int = 1, timeout: int = 2) -> list[CommandResult]:
     """Ping multiple machines concurrently."""
     tasks = [ping_one(m, count=count, timeout=timeout) for m in machines]
     return await asyncio.gather(*tasks)
