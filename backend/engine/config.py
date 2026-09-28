@@ -3,14 +3,12 @@ from pathlib import Path
 
 from readable_utils.inventory_tools import find_inventory_paths
 
-# Repo root (this file is backends/python/engine/config.py). In shallower
-# layouts (e.g. the docker image, where the package sits at /app/engine) the
-# repo-relative paths don't exist — fall back to the package's parent dir and
-# rely on HERDSTONE_HOSTS / the container environment instead.
-try:
-    REPO_ROOT = Path(__file__).resolve().parents[3]
-except IndexError:
-    REPO_ROOT = Path(__file__).resolve().parents[1]
+# Repo root (this file is backend/engine/config.py). In the docker image the
+# package sits one level shallower, at /app/engine, where the repo-relative
+# paths don't exist: use the package's parent dir there and rely on
+# HERDSTONE_HOSTS / the container environment instead.
+_PROJECT_DIR = Path(__file__).resolve().parents[1]
+REPO_ROOT = _PROJECT_DIR.parent if _PROJECT_DIR.name == "backend" else _PROJECT_DIR
 
 # Inventory search path — EVERY existing file loads and the herds merge
 # (first definition of a name wins), the same multi-context discovery the

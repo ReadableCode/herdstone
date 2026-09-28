@@ -9,7 +9,7 @@ services:
   herdstone-web:
     image: herdstone_web_image
     build:
-      context: ./backends/python
+      context: ./backend
       dockerfile: Dockerfile
     container_name: herdstone_web
     environment:

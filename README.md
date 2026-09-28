@@ -17,7 +17,7 @@ the same functions in-process.
 
 ```plaintext
 herdstone/
-├── backends/python/
+├── backend/
 │   ├── pyproject.toml        # Python project config (uv)
 │   ├── engine/               # The engine package
 │   │   ├── models.py             # Machine, Service, CommandResult dataclasses
@@ -30,7 +30,7 @@ herdstone/
 │   │   ├── tui/app.py            # Textual TUI (couch/SSH use)
 │   │   └── web/app.py            # NiceGUI web UI (phone use, Tailscale-bound)
 │   └── tests/
-├── cli/herdstone             # shell wrapper: uv run into backends/python
+├── cli/herdstone             # shell wrapper: uv run into backend
 ├── .env -> ../personal_credentials/personal.env   # symlink, gitignored
 ├── .env.example              # placeholder file (no keys needed today)
 └── README.md
@@ -142,7 +142,7 @@ cd herdstone
 uv python install 3.14
 uv python pin 3.14
 
-cd backends/python
+cd backend
 uv sync
 uv run herdstone --help
 uv run pytest
