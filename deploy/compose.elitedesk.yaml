@@ -1,4 +1,5 @@
-# Herdstone herd-monitor web UI (NiceGUI): hosts/ping/storage. Pulled into
+# Herdstone herd-monitor web UI (NiceGUI): hosts/ping here, since the image
+# has no ssh client and disk usage needs one. Pulled into
 # Docker/docker_compose_projects.yaml via `include:`; the include entry sets
 # project_directory to this repo's root, so relative paths resolve from here.
 # Pings LAN hosts directly rather than talking to other compose services, so

@@ -8,6 +8,8 @@ design/STYLE.md) — tokens live in _TOKENS_CSS, Quasar brand colors are mapped
 onto them in index().
 """
 
+import shutil
+
 from ..inventory import parse_inventory
 from ..models import Machine
 from ..ping import ping_many
@@ -134,8 +136,20 @@ def _bar(use_percent: float, width: int = 20) -> str:
     return "█" * filled + "░" * (width - filled)
 
 
+def storage_available() -> bool:
+    """Whether this process can read disk usage, which runs over ssh.
+
+    True on a machine with an ssh client, where the keys are the user's own.
+    The deployed image ships no ssh client on purpose: a published web
+    container must hold no ssh key, so storage is off there.
+    """
+    return shutil.which("ssh") is not None
+
+
 def run_web(host: str = "127.0.0.1", port: int = 8787) -> None:
     from nicegui import ui
+
+    with_storage = storage_available()
 
     @ui.page("/")
     def index() -> None:
@@ -203,7 +217,10 @@ def run_web(host: str = "127.0.0.1", port: int = 8787) -> None:
                     ).classes("text-xs muted whitespace-pre")
 
         def _host_card(machine: Machine) -> None:
-            with ui.card().classes("w-full cursor-pointer").on("click", lambda m=machine: open_storage(m)):
+            card = ui.card().classes("w-full")
+            if with_storage:
+                card.classes("cursor-pointer").on("click", lambda m=machine: open_storage(m))
+            with card:
                 with ui.row().classes("items-center no-wrap w-full gap-4"):
                     with ui.column().classes("gap-1 min-w-0 grow"):
                         ui.label(machine.name).classes("text-lg font-bold")

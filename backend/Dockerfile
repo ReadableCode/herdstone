@@ -30,7 +30,9 @@ RUN uv sync --frozen --no-dev
 EXPOSE 8787
 
 # Inventory path comes from HERDSTONE_HOSTS (compose mounts hosts.json at
-# /config/hosts.json); no API keys needed — the herd monitor only pings and
-# SSHes. Run the venv entry point directly — `uv run` would re-sync (incl.
-# dev deps) on every container start.
+# /config/hosts.json); no API keys needed. No ssh client is installed, on
+# purpose: this container is published and must hold no ssh key, and without
+# the client the web UI leaves disk usage off (engine/web/app.py,
+# storage_available). Run the venv entry point directly, since `uv run` would
+# re-sync (incl. dev deps) on every container start.
 CMD ["/app/.venv/bin/herdstone", "web", "--host", "0.0.0.0", "--port", "8787"]

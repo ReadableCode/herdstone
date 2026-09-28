@@ -122,7 +122,10 @@ menubar app, etc.) consume the engine as a subprocess.
 
 The web UI shows the herd — one card per host with its connection, groups,
 and services; a "ping all" button that fans out concurrently and lights up
-status dots; tap a host for its disk usage bars. Runs as a single process;
+status dots; tap a host for its disk usage bars. Disk usage runs over ssh, so
+it is offered only where the web UI runs with an ssh client, on your own
+machine with your own keys. The deployed container ships none on purpose and
+shows hosts and ping only. Runs as a single process;
 bind it to your Tailscale IP on an always-on box so phones on the tailnet can
 reach it. Never expose it publicly — there is no auth layer by design
 (tailnet membership is the auth).
